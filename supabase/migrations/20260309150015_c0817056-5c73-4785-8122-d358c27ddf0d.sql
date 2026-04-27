@@ -1,0 +1,1 @@
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS is_encaixe boolean NOT NULL DEFAULT false;

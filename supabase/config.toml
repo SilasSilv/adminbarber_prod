@@ -1,0 +1,10 @@
+project_id = "rvhaelmmczscrtyguthw"
+
+[functions.send-appointment-reminders]
+verify_jwt = false
+
+[functions.handle-appointment-action]
+verify_jwt = false
+
+[functions.save-push-subscription]
+verify_jwt = false
