@@ -10,7 +10,6 @@ import { TimeStep } from "@/components/booking/TimeStep";
 import { ClientInfoStep } from "@/components/booking/ClientInfoStep";
 import { ConfirmStep } from "@/components/booking/ConfirmStep";
 import { PixPaymentStep } from "@/components/booking/PixPaymentStep";
-import { BookingService, BookingBarber, findBarbershopBySlug, getServicesForBarbershop, getBarbersForBarbershop, isSlotStillAvailable, generateTimeSlots, addBookingAppointment } from "@/data/mockBookingData";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,7 +20,6 @@ function addMinutesToTime(time: string, minutes: number): string {
 }
 
 export default function PublicBooking() {
-  // 1️⃣ Tipagem segura dos parâmetros da URL
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -29,20 +27,19 @@ export default function PublicBooking() {
   // Estados do fluxo de agendamento
   const [step, setStep] = useState(1);
   const [barbershop, setBarbershop] = useState<any>(null);
-  const [services, setServices] = useState<BookingService[]>([]);
-  const [barbers, setBarbers] = useState<BookingBarber[]>([]);
-  const [selectedService, setSelectedService] = useState<BookingService | null>(null);
-  const [selectedBarber, setSelectedBarber] = useState<BookingBarber | null>(null);
+  const [services, setServices] = useState<any[]>([]);
+  const [barbers, setBarbers] = useState<any[]>([]);
+  const [selectedService, setSelectedService] = useState<any | null>(null);
+  const [selectedBarber, setSelectedBarber] = useState<any | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [showPix, setShowPix] = useState(false);
-  const [loading, setLoading] = useState(true); // Evita tela em branco enquanto os dados são carregados
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // --------------------------------------------------------------
-  // 2️⃣ Carrega a barbearia pelo slug e, simultaneamente, os serviços
-  // --------------------------------------------------------------
+  // Carrega a barbearia pelo slug
   useEffect(() => {
     if (!slug) {
       toast({
@@ -57,7 +54,7 @@ export default function PublicBooking() {
     const loadBarbershopAndServices = async () => {
       setLoading(true);
       try {
-        // ---- Busca a barbearia pelo slug ----
+        // Busca a barbearia pelo slug
         const { data: shopData, error: shopError } = await supabase
           .from("barbershops")
           .select("*")
@@ -65,7 +62,6 @@ export default function PublicBooking() {
           .single();
 
         if (shopError || !shopData) {
-          console.error("Barbershop fetch error:", shopError);
           toast({
             title: "Erro",
             description: "Barbearia não encontrada.",
@@ -79,26 +75,21 @@ export default function PublicBooking() {
         const shop = shopData;
         setBarbershop(shop);
 
-        // ---- Busca os serviços ativos desta barbearia ----
+        // Busca os serviços ativos
         const { data: servicesData, error: servicesError } = await supabase
           .from("services")
           .select("id, name, price, duration_minutes")
-          .eq("barbershop_id", shop.id) // filtro crítico
-          .eq("active", true) // só serviços ativos
+          .eq("barbershop_id", shop.id)
+          .eq("active", true)
           .order("name");
 
         if (servicesError) {
           console.error("Services fetch error:", servicesError);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os serviços.",
-            variant: "destructive",
-          });
         } else {
           setServices(servicesData || []);
         }
 
-        // ---- Busca os barbeiros desta barbearia ----
+        // Busca os barbeiros
         const { data: barbersData, error: barbersError } = await supabase
           .from("professionals")
           .select("id, name")
@@ -111,7 +102,7 @@ export default function PublicBooking() {
           setBarbers(barbersData || []);
         }
       } catch (err) {
-        console.error("Unexpected error in loadBarbershopAndServices:", err);
+        console.error("Unexpected error:", err);
         toast({
           title: "Erro",
           description: "Ocorreu um erro inesperado.",
@@ -126,9 +117,6 @@ export default function PublicBooking() {
     loadBarbershopAndServices();
   }, [slug, navigate, toast]);
 
-  // --------------------------------------------------------------
-  // 3️⃣ UI enquanto os dados estão sendo carregados
-  // --------------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -137,9 +125,6 @@ export default function PublicBooking() {
     );
   }
 
-  // --------------------------------------------------------------
-  // 4️⃣ Caso a barbearia não tenha sido encontrada após o carregamento
-  // --------------------------------------------------------------
   if (!barbershop) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center text-center p-4">
@@ -153,9 +138,6 @@ export default function PublicBooking() {
     );
   }
 
-  // --------------------------------------------------------------
-  // 5️⃣ Fluxo de etapas do agendamento (mantido inalterado)
-  // --------------------------------------------------------------
   const steps = [
     { label: "Serviço" },
     { label: "Profissional" },
@@ -171,39 +153,46 @@ export default function PublicBooking() {
       return;
     }
 
-    const stillAvailable = isSlotStillAvailable(
-      selectedBarber.id,
-      selectedDate.toISOString().split("T")[0],
-      selectedTime,
-      selectedService.duration_minutes
-    );
-    if (!stillAvailable) {
-      toast({ title: "Erro", description: "Este horário acabou de ser ocupado. Escolha outro.", variant: "destructive" });
+    // Calcula o horário de término
+    const endTime = addMinutesToTime(selectedTime, selectedService.duration_minutes);
+
+    // Salva o agendamento no banco de dados
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("appointments")
+      .insert({
+        barbershop_id: barbershop.id,
+        professional_id: selectedBarber.id,
+        service_id: selectedService.id,
+        date: selectedDate.toISOString().split("T")[0],
+        start_time: selectedTime,
+        end_time: endTime,
+        client_name: clientName.trim(),
+        client_phone: clientPhone.trim(),
+        total: selectedService.price,
+        status: "agendado",
+      })
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      toast({ title: "Erro ao agendar", description: error.message, variant: "destructive" });
       return;
     }
 
-    const newAppointment = {
-      id: `a_${Date.now()}`,
-      barber_id: selectedBarber.id,
-      date: selectedDate.toISOString().split("T")[0],
-      time: selectedTime,
-      duration_minutes: selectedService.duration_minutes,
-      status: "agendado",
-    };
-
-    addBookingAppointment(newAppointment);
     toast({ title: "Agendamento confirmado! ✅", description: "Agora realize o pagamento via Pix." });
     setShowPix(true);
   };
 
   const handlePixComplete = () => {
     toast({ title: "Pagamento concluído! ✅", description: "Seu agendamento está garantido." });
+    // Redireciona para a página inicial ou mostra tela de sucesso
     navigate("/");
   };
 
-  // --------------------------------------------------------------
-  // 6️⃣ Renderização do pagamento via Pix (etapa final)
-  // --------------------------------------------------------------
+  // Tela de pagamento Pix
   if (showPix && selectedService) {
     return (
       <div className="min-h-screen bg-background">
@@ -220,16 +209,23 @@ export default function PublicBooking() {
             amount={selectedService.price}
             merchantName={barbershop.name}
             merchantCity="Sua Cidade"
-            pixKey="12345678900" // Exemplo – substituir por chave real
+            pixKey="12345678900" // Substituir pela chave real da barbearia
           />
+          <div className="mt-4">
+            <Button 
+              variant="gold" 
+              size="lg" 
+              className="w-full gap-2"
+              onClick={handlePixComplete}
+            >
+              Já realizei o pagamento
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // --------------------------------------------------------------
-  // 7️⃣ Renderização normal do fluxo de agendamento
-  // --------------------------------------------------------------
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 glass border-b border-border/50">
@@ -245,7 +241,6 @@ export default function PublicBooking() {
         <StepIndicator steps={steps.map(s => s.label)} currentStep={step} />
 
         <div className="mt-6">
-          {/* Serviço */}
           {step === 1 && (
             <ServiceStep
               services={services}
@@ -254,7 +249,6 @@ export default function PublicBooking() {
             />
           )}
 
-          {/* Profissional */}
           {step === 2 && (
             <BarberStep
               barbers={barbers}
@@ -263,12 +257,10 @@ export default function PublicBooking() {
             />
           )}
 
-          {/* Data */}
           {step === 3 && (
             <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} />
           )}
 
-          {/* Horário */}
           {step === 4 && (
             <TimeStep
               slots={selectedService && selectedDate
@@ -279,7 +271,6 @@ export default function PublicBooking() {
             />
           )}
 
-          {/* Dados do cliente */}
           {step === 5 && (
             <ClientInfoStep
               name={clientName}
@@ -289,7 +280,6 @@ export default function PublicBooking() {
             />
           )}
 
-          {/* Confirmação */}
           {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && (
             <ConfirmStep
               service={selectedService}
@@ -302,7 +292,6 @@ export default function PublicBooking() {
           )}
         </div>
 
-        {/* Navegação entre etapas */}
         <div className="flex justify-between mt-6">
           {step > 1 && (
             <Button variant="outline" onClick={() => setStep(step - 1)}>
@@ -313,7 +302,6 @@ export default function PublicBooking() {
             <Button
               className="ml-auto"
               onClick={() => {
-                // Validações simples antes de avançar
                 if (step === 1 && !selectedService) {
                   toast({ title: "Selecione um serviço", variant: "destructive" });
                   return;
@@ -341,12 +329,36 @@ export default function PublicBooking() {
             </Button>
           )}
           {step === 6 && (
-            <Button className="ml-auto" onClick={handleConfirm}>
-              Confirmar Agendamento
+            <Button 
+              className="ml-auto" 
+              onClick={handleConfirm}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                "Confirmar Agendamento"
+              )}
             </Button>
           )}
         </div>
       </main>
     </div>
   );
+}
+
+// Função auxiliar para gerar horários disponíveis (simplificada)
+function generateTimeSlots(durationMinutes: number, occupiedSlots: any[]): string[] {
+  const slots: string[] = [];
+  for (let hour = 8; hour <= 20; hour++) {
+    const time = `${hour.toString().padStart(2, "0")}:00`;
+    slots.push(time);
+    if (hour < 20) {
+      slots.push(`${hour.toString().padStart(2, "0")}:30`);
+    }
+  }
+  return slots;
 }
