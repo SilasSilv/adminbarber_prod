@@ -11,6 +11,7 @@ import { TimeStep } from "@/components/booking/TimeStep";
 import { ClientInfoStep } from "@/components/booking/ClientInfoStep";
 import { ConfirmStep } from "@/components/booking/ConfirmStep";
 import { PixPaymentStep } from "@/components/booking/PixPaymentStep";
+import { subscribeToReminder } from "@/lib/push";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,6 +43,7 @@ export default function PublicBooking() {
   const [saving, setSaving] = useState(false);
   const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
 
   // Carrega a barbearia pelo slug
   useEffect(() => {
@@ -227,6 +229,9 @@ export default function PublicBooking() {
       return;
     }
 
+    // Armazena o ID do agendamento criado
+    setCreatedAppointmentId(data.id);
+    
     toast({ title: "Agendamento confirmado! ✅", description: "Seu horário foi reservado." });
     setShowSuccess(true);
   };
@@ -244,6 +249,25 @@ export default function PublicBooking() {
           <p className="text-sm text-muted-foreground">
             {selectedService?.name} com {selectedBarber?.name} às {selectedTime} no dia {selectedDate?.toLocaleDateString("pt-BR")}
           </p>
+          
+          {/* Botão para ativar notificações de lembrete */}
+          <Button 
+            onClick={async () => {
+              if (createdAppointmentId) {
+                const success = await subscribeToReminder(createdAppointmentId);
+                if (success) {
+                  toast({ title: "Lembretes ativados! 🔔", description: "Você receberá notificações antes do seu horário." });
+                } else {
+                  toast({ title: "Permissão necessária", description: "Ative as notificações no navegador para receber lembretes.", variant: "destructive" });
+                }
+              }
+            }}
+            variant="gold"
+            className="w-full gap-2"
+          >
+            Ativar Lembretes de Agendamento
+          </Button>
+
           <Button asChild variant="outline" className="w-full">
             <a href="/">Voltar ao Início</a>
           </Button>
@@ -428,7 +452,7 @@ export default function PublicBooking() {
 
 // Função auxiliar para gerar horários disponíveis (filtra ocupados)
 function generateTimeSlots(durationMinutes: number, occupiedSlots: { time: string; duration: number }[]): string[] {
-  const slots: string[] = [];
+  const slots: string[] = [];  
   
   for (let hour = 8; hour <= 20; hour++) {
     const time = `${hour.toString().padStart(2, "0")}:00`;
@@ -438,7 +462,7 @@ function generateTimeSlots(durationMinutes: number, occupiedSlots: { time: strin
       const slotStart = hour * 60;
       const slotEnd = slotStart + durationMinutes;
       return slotStart < occEnd && slotEnd > occStart;
-    });
+    });    
     
     if (!isOccupied) {
       slots.push(time);
