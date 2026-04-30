@@ -151,10 +151,4 @@ export function PixPaymentStep({ amount, merchantName, merchantCity, pixKey }: P
           }}
           disabled={isExpired}
         >
-          <CheckCircle2 className="h-4 w-4" />
-          Já realizei o pagamento123
-        </Button>
-      </div>
-    </div>
-  );
 }
