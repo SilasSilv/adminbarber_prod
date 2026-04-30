@@ -83,8 +83,7 @@ export default function PublicBooking() {
         const { data: servicesData, error: servicesError } = await supabase
           .from("services")
           .select("id, name, price, duration_minutes")
-          .eq("barbershop_id", shop.id)          // filtro crítico
-          .eq("active", true)                    // só serviços ativos
+          .eq("barbershop_id", shop.id)          // filtro crítico          .eq("active", true)                    // só serviços ativos
           .order("name");
 
         if (servicesError) {
@@ -99,8 +98,7 @@ export default function PublicBooking() {
         }
 
         // ---- Busca os barbeiros desta barbearia ----
-        const { data: barbersData, error: barbersError } = await supabase
-          .from("professionals")
+        const { data: barbersData, error: barbersError } = await supabase          .from("professionals")
           .select("id, name")
           .eq("barbershop_id", shop.id)
           .eq("active", true);
@@ -135,7 +133,7 @@ export default function PublicBooking() {
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  );
+  }
 
   // --------------------------------------------------------------
   // 4️⃣ Caso a barbearia não tenha sido encontrada após o carregamento
@@ -146,8 +144,7 @@ export default function PublicBooking() {
         <div>
           <h1 className="text-2xl font-bold mb-2">Barbearia não encontrada</h1>
           <Button variant="outline" onClick={() => navigate("/")}>
-            Voltar ao Início
-          </Button>
+            Voltar ao Início          </Button>
         </div>
       </div>
     );
