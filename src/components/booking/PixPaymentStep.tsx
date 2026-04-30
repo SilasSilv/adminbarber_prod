@@ -143,15 +143,6 @@ export function PixPaymentStep({ amount, merchantName, merchantCity, pixKey }: P
         <p className="text-xs text-muted-foreground text-center mb-2">
           Após realizar o pagamento, clique no botão abaixo
         </p>
-        <Button
-          variant="gold"
-          className="w-full gap-2"
-          onClick={() => {
-            toast({ title: "Pagamento concluído!" });
-          }}
-          disabled={isExpired}
-        >
-
       </div>
     </div>
   );
