@@ -21,12 +21,12 @@ function addMinutesToTime(time: string, minutes: number): string {
 }
 
 export default function PublicBooking() {
-  // 1. Corrigido: tipagem explícita e segura para useParams
+  // 1️⃣ Tipagem segura dos parâmetros da URL
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Estados do fluxo
+  // Estados do fluxo de agendamento
   const [step, setStep] = useState(1);
   const [barbershop, setBarbershop] = useState<any>(null);
   const [services, setServices] = useState<BookingService[]>([]);
@@ -38,71 +38,124 @@ export default function PublicBooking() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [showPix, setShowPix] = useState(false);
-  const [loading, setLoading] = useState(true); // Novo estado para evitar tela em branco inicial
+  const [loading, setLoading] = useState(true); // Evita tela em branco enquanto os dados são carregados
 
-  // 2. Efeito para carregar a barbearia baseado no slug da URL
+  // --------------------------------------------------------------
+  // 2️⃣ Carrega a barbearia pelo slug e, simultaneamente, os serviços
+  // --------------------------------------------------------------
   useEffect(() => {
     if (!slug) {
-      toast({ title: "Erro", description: "Barbearia não encontrada na URL.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Slug da barbearia não encontrado na URL.",
+        variant: "destructive",
+      });
       navigate("/", { replace: true });
       return;
     }
 
-    const loadBarbershop = async () => {
+    const loadBarbershopAndServices = async () => {
       setLoading(true);
-      // Primeiro tenta do mock (local)
-      let shop = findBarbershopBySlug(slug);
-      
-      // Se não achar no mock, tenta buscar no Supabase (caso a barbearia seja real)
-      if (!shop) {
-        const { data, error } = await supabase
+      try {
+        // ---- Busca a barbearia pelo slug ----
+        const { data: shopData, error: shopError } = await supabase
           .from("barbershops")
           .select("*")
           .eq("slug", slug)
           .single();
 
-        if (error || !data) {
-          toast({ title: "Erro", description: "Barbearia não encontrada.", variant: "destructive" });
+        if (shopError || !shopData) {
+          console.error("Barbershop fetch error:", shopError);
+          toast({
+            title: "Erro",
+            description: "Barbearia não encontrada.",
+            variant: "destructive",
+          });
           navigate("/", { replace: true });
           setLoading(false);
           return;
         }
-        shop = data;
-      }
 
-      setBarbershop(shop);
-      // Carrega serviços e barbeiros daquela barbearia
-      const shopServices = getServicesForBarbershop(shop.id);
-      const shopBarbers = getBarbersForBarbershop(shop.id);
-      setServices(shopServices);
-      setBarbers(shopBarbers);
-      setLoading(false);
+        const shop = shopData;
+        setBarbershop(shop);
+
+        // ---- Busca os serviços ativos desta barbearia ----
+        const { data: servicesData, error: servicesError } = await supabase
+          .from("services")
+          .select("id, name, price, duration_minutes")
+          .eq("barbershop_id", shop.id)          // filtro crítico
+          .eq("active", true)                    // só serviços ativos
+          .order("name");
+
+        if (servicesError) {
+          console.error("Services fetch error:", servicesError);
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar os serviços.",
+            variant: "destructive",
+          });
+        } else {
+          setServices(servicesData || []);
+        }
+
+        // ---- Busca os barbeiros desta barbearia ----
+        const { data: barbersData, error: barbersError } = await supabase
+          .from("professionals")
+          .select("id, name")
+          .eq("barbershop_id", shop.id)
+          .eq("active", true);
+
+        if (barbersError) {
+          console.error("Barbers fetch error:", barbersError);
+        } else {
+          setBarbers(barbersData || []);
+        }
+      } catch (err) {
+        console.error("Unexpected error in loadBarbershopAndServices:", err);
+        toast({
+          title: "Erro",
+          description: "Ocorreu um erro inesperado.",
+          variant: "destructive",
+        });
+        navigate("/", { replace: true });
+      } finally {
+        setLoading(false);
+      }
     };
 
-    loadBarbershop();
+    loadBarbershopAndServices();
   }, [slug, navigate, toast]);
 
-  // 3. Renderiza um Loading enquanto busca os dados (Evita a tela em branco)
+  // --------------------------------------------------------------
+  // 3️⃣ UI enquanto os dados estão sendo carregados
+  // --------------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
+  );
 
-  // 4. Se por algum motivo a barbearia não existir após o loading
+  // --------------------------------------------------------------
+  // 4️⃣ Caso a barbearia não tenha sido encontrada após o carregamento
+  // --------------------------------------------------------------
   if (!barbershop) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center text-center p-4">
         <div>
           <h1 className="text-2xl font-bold mb-2">Barbearia não encontrada</h1>
-          <Button onClick={() => navigate("/")}>Voltar ao Início</Button>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            Voltar ao Início
+          </Button>
         </div>
       </div>
     );
   }
 
+  // --------------------------------------------------------------
+  // 5️⃣ Fluxo de etapas do agendamento (mantido inalterado)
+  // --------------------------------------------------------------
   const steps = [
     { label: "Serviço" },
     { label: "Profissional" },
@@ -118,8 +171,12 @@ export default function PublicBooking() {
       return;
     }
 
-    // Verifica disponibilidade real antes de confirmar
-    const stillAvailable = isSlotStillAvailable(selectedBarber.id, selectedDate.toISOString().split("T")[0], selectedTime, selectedService.duration_minutes);
+    const stillAvailable = isSlotStillAvailable(
+      selectedBarber.id,
+      selectedDate.toISOString().split("T")[0],
+      selectedTime,
+      selectedService.duration_minutes
+    );
     if (!stillAvailable) {
       toast({ title: "Erro", description: "Este horário acabou de ser ocupado. Escolha outro.", variant: "destructive" });
       return;
@@ -144,7 +201,9 @@ export default function PublicBooking() {
     navigate("/");
   };
 
-  // Se estiver na etapa de pagamento Pix
+  // --------------------------------------------------------------
+  // 6️⃣ Renderização do pagamento via Pix (etapa final)
+  // --------------------------------------------------------------
   if (showPix && selectedService) {
     return (
       <div className="min-h-screen bg-background">
@@ -161,14 +220,15 @@ export default function PublicBooking() {
             amount={selectedService.price}
             merchantName={barbershop.name}
             merchantCity="Sua Cidade"
-            pixKey="12345678900" // Exemplo
-          />
+            pixKey="12345678900" // Exemplo – substituir por chave real          />
         </div>
       </div>
     );
   }
 
-  // Renderização do fluxo normal
+  // --------------------------------------------------------------
+  // 7️⃣ Renderização normal do fluxo de agendamento
+  // --------------------------------------------------------------
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 glass border-b border-border/50">
@@ -180,10 +240,11 @@ export default function PublicBooking() {
         </div>
       </header>
 
-      <div className="p-4 max-w-md mx-auto">
+      <main className="p-4 max-w-md mx-auto">
         <StepIndicator steps={steps.map(s => s.label)} currentStep={step} />
 
         <div className="mt-6">
+          {/* Serviço */}
           {step === 1 && (
             <ServiceStep
               services={services}
@@ -191,6 +252,8 @@ export default function PublicBooking() {
               onSelect={setSelectedService}
             />
           )}
+
+          {/* Profissional */}
           {step === 2 && (
             <BarberStep
               barbers={barbers}
@@ -198,19 +261,24 @@ export default function PublicBooking() {
               onSelect={setSelectedBarber}
             />
           )}
+
+          {/* Data */}
           {step === 3 && (
             <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} />
           )}
+
+          {/* Horário */}
           {step === 4 && (
             <TimeStep
               slots={selectedService && selectedDate
                 ? generateTimeSlots(selectedService.duration_minutes, [])
-                : []
-              }
+                : []}
               selectedTime={selectedTime}
               onSelect={setSelectedTime}
             />
           )}
+
+          {/* Dados do cliente */}
           {step === 5 && (
             <ClientInfoStep
               name={clientName}
@@ -219,6 +287,8 @@ export default function PublicBooking() {
               onPhoneChange={setClientPhone}
             />
           )}
+
+          {/* Confirmação */}
           {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && (
             <ConfirmStep
               service={selectedService}
@@ -231,6 +301,7 @@ export default function PublicBooking() {
           )}
         </div>
 
+        {/* Navegação entre etapas */}
         <div className="flex justify-between mt-6">
           {step > 1 && (
             <Button variant="outline" onClick={() => setStep(step - 1)}>
@@ -274,7 +345,7 @@ export default function PublicBooking() {
             </Button>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
