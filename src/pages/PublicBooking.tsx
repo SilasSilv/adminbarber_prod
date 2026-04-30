@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Calendar, Loader2, Zap } from "lucide-react";
+import { ArrowLeft, Calendar, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { StepIndicator } from "@/components/booking/StepIndicator";
 import { ServiceStep } from "@/components/booking/ServiceStep";
 import { BarberStep } from "@/components/booking/BarberStep";
@@ -35,7 +36,8 @@ export default function PublicBooking() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [showPix, setShowPix] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -81,7 +83,7 @@ export default function PublicBooking() {
           .select("id, name, price, duration_minutes")
           .eq("barbershop_id", shop.id)
           .eq("active", true)
-          .order("name");
+          .order("name.order("name");
 
         if (servicesError) {
           console.error("Services fetch error:", servicesError);
@@ -147,7 +149,7 @@ export default function PublicBooking() {
     { label: "Confirmação" },
   ];
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (paymentMethod: "pix" | "in_person") => {
     if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName.trim()) {
       toast({ title: "Erro", description: "Preencha todos os dados obrigatórios.", variant: "destructive" });
       return;
@@ -182,23 +184,38 @@ export default function PublicBooking() {
       return;
     }
 
-    toast({ title: "Agendamento confirmado! ✅", description: "Agora realize o pagamento via Pix." });
-    setShowPix(true);
+    toast({ title: "Agendamento confirmado! ✅", description: "Seu horário foi reservado." });
+    setShowSuccess(true);
   };
 
-  const handlePixComplete = () => {
-    toast({ title: "Pagamento concluído! ✅", description: "Seu agendamento está garantido." });
-    // Redireciona para a página inicial ou mostra tela de sucesso
-    navigate("/");
-  };
+  // Tela de sucesso
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8 text-center space-y-6">
+          <CheckCircle className="w-16 h-16 mx-auto text-green-500" />
+          <h1 className="text-2xl font-bold">Agendamento Confirmado! ✅</h1>
+          <p className="text-muted-foreground">
+            Seu horário foi reservado com sucesso na <span className="font-semibold text-foreground">{barbershop.name}</span>.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {selectedService?.name} com {selectedBarber?.name} às {selectedTime} no dia {selectedDate?.toLocaleDateString("pt-BR")}
+          </p>
+          <Button asChild variant="outline" className="w-full">
+            <a href="/">Voltar ao Início</a>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   // Tela de pagamento Pix
-  if (showPix && selectedService) {
+  if (showPayment && selectedService) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-40 glass border-b border-border/50">
           <div className="flex items-center gap-3 px-4 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => setShowPix(false)}>
+            <Button variant="ghost" size="icon-sm" onClick={() => setShowPayment(false)}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="text-lg font-semibold">Pagamento</h1>
@@ -211,14 +228,38 @@ export default function PublicBooking() {
             merchantCity="Sua Cidade"
             pixKey="12345678900" // Substituir pela chave real da barbearia
           />
-          <div className="mt-4">
+          <div className="mt-4 space-y-3">
             <Button 
               variant="gold" 
               size="lg" 
               className="w-full gap-2"
-              onClick={handlePixComplete}
+              onClick={() => handleConfirm("pix")}
+              disabled={saving}
             >
-              Já realizei o pagamento
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                "Já realizei o pagamento"
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="w-full gap-2"
+              onClick={() => handleConfirm("in_person")}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                "Vou pagar na barbearia"
+              )}
             </Button>
           </div>
         </div>
@@ -331,17 +372,9 @@ export default function PublicBooking() {
           {step === 6 && (
             <Button 
               className="ml-auto" 
-              onClick={handleConfirm}
-              disabled={saving}
+              onClick={() => setShowPayment(true)}
             >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Salvando...
-                </>
-              ) : (
-                "Confirmar Agendamento"
-              )}
+              Confirmar Agendamento
             </Button>
           )}
         </div>
