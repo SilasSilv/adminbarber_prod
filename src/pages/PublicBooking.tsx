@@ -1,1 +1,352 @@
-import { useState, useEffect } from "react"; import { useParams, useNavigate } from "react-router-dom"; import { ArrowLeft, Calendar, Loader2, Zap } from "lucide-react"; import { Button } from "@/components/ui/button"; import { StepIndicator } from "@/components/booking/StepIndicator"; import { ServiceStep } from "@/components/booking/ServiceStep"; import { BarberStep } from "@/components/booking/BarberStep"; import { DateStep } from "@/components/booking/DateStep"; import { TimeStep } from "@/components/booking/TimeStep"; import { ClientInfoStep } from "@/components/booking/ClientInfoStep"; import { ConfirmStep } from "@/components/booking/ConfirmStep"; import { PixPaymentStep } from "@/components/booking/PixPaymentStep"; import { BookingService, BookingBarber, findBarbershopBySlug, getServicesForBarbershop, getBarbersForBarbershop, isSlotStillAvailable, generateTimeSlots, addBookingAppointment } from "@/data/mockBookingData"; import { supabase } from "@/integrations/supabase/client"; import { useToast } from "@/hooks/use-toast"; function addMinutesToTime(time: string, minutes: number): string { const [h, m] = time.split(":").map(Number); const total = h * 60 + m + minutes; return `${Math.floor(total / 60).toString().padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`; } export default function PublicBooking() { // 1️⃣ Tipagem segura dos parâmetros da URL const { slug } = useParams<{ slug: string }>(); const navigate = useNavigate(); const { toast } = useToast(); // Estados do fluxo de agendamento const [step, setStep] = useState(1); const [barbershop, setBarbershop] = useState<any>(null); const [services, setServices] = useState<BookingService[]>([]); const [barbers, setBarbers] = useState<BookingBarber[]>([]); const [selectedService, setSelectedService] = useState<BookingService | null>(null); const [selectedBarber, setSelectedBarber] = useState<BookingBarber | null>(null); const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined); const [selectedTime, setSelectedTime] = useState<string | null>(null); const [clientName, setClientName] = useState(""); const [clientPhone, setClientPhone] = useState(""); const [showPix, setShowPix] = useState(false); const [loading, setLoading] = useState(true); // Evita tela em branco enquanto os dados são carregados // -------------------------------------------------------------- // 2️⃣ Carrega a barbearia pelo slug e, simultaneamente, os serviços // -------------------------------------------------------------- useEffect(() => { if (!slug) { toast({ title: "Erro", description: "Slug da barbearia não encontrado na URL.", variant: "destructive", }); navigate("/", { replace: true }); return; } const loadBarbershopAndServices = async () => { setLoading(true); try { // ---- Busca a barbearia pelo slug ---- const { data: shopData, error: shopError } = await supabase .from("barbershops") .select("*") .eq("slug", slug) .single(); if (shopError || !shopData) { console.error("Barbershop fetch error:", shopError); toast({ title: "Erro", description: "Barbearia não encontrada.", variant: "destructive", }); navigate("/", { replace: true }); setLoading(false); return; } const shop = shopData; setBarbershop(shop); // ---- Busca os serviços ativos desta barbearia ---- const { data: servicesData, error: servicesError } = await supabase .from("services") .select("id, name, price, duration_minutes") .eq("barbershop_id", shop.id) // filtro crítico .eq("active", true) // só serviços ativos .order("name"); if (servicesError) { console.error("Services fetch error:", servicesError); toast({ title: "Erro", description: "Não foi possível carregar os serviços.", variant: "destructive", }); } else { setServices(servicesData || []); } // ---- Busca os barbeiros desta barbearia ---- const { data: barbersData, error: barbersError } = await supabase .from("professionals") .select("id, name") .eq("barbershop_id", shop.id) .eq("active", true); if (barbersError) { console.error("Barbers fetch error:", barbersError); } else { setBarbers(barbersData || []); } } catch (err) { console.error("Unexpected error in loadBarbershopAndServices:", err); toast({ title: "Erro", description: "Ocorreu um erro inesperado.", variant: "destructive", }); navigate("/", { replace: true }); } finally { setLoading(false); } }; loadBarbershopAndServices(); }, [slug, navigate, toast]); // -------------------------------------------------------------- // 3️⃣ UI enquanto os dados estão sendo carregados // -------------------------------------------------------------- if (loading) { return ( <div className="min-h-screen bg-background flex items-center justify-center"> <Loader2 className="h-8 w-8 animate-spin text-primary" /> </div> ); } // -------------------------------------------------------------- // 4️⃣ Caso a barbearia não tenha sido encontrada após o carregamento // -------------------------------------------------------------- if (!barbershop) { return ( <div className="min-h-screen bg-background flex items-center justify-center text-center p-4"> <div> <h1 className="text-2xl font-bold mb-2">Barbearia não encontrada</h1> <Button variant="outline" onClick={() => navigate("/")}> Voltar ao Início </Button> </div> </div> ); } // -------------------------------------------------------------- // 5️⃣ Fluxo de etapas do agendamento (mantido inalterado) // -------------------------------------------------------------- const steps = [ { label: "Serviço" }, { label: "Profissional" }, { label: "Data" }, { label: "Horário" }, { label: "Dados" }, { label: "Confirmação" }, ]; const handleConfirm = async () => { if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName.trim()) { toast({ title: "Erro", description: "Preencha todos os dados obrigatórios.", variant: "destructive" }); return; } const stillAvailable = isSlotStillAvailable( selectedBarber.id, selectedDate.toISOString().split("T")[0], selectedTime, selectedService.duration_minutes ); if (!stillAvailable) { toast({ title: "Erro", description: "Este horário acabou de ser ocupado. Escolha outro.", variant: "destructive" }); return; } const newAppointment = { id: `a_${Date.now()}`, barber_id: selectedBarber.id, date: selectedDate.toISOString().split("T")[0], time: selectedTime, duration_minutes: selectedService.duration_minutes, status: "agendado", }; addBookingAppointment(newAppointment); toast({ title: "Agendamento confirmado! ✅", description: "Agora realize o pagamento via Pix." }); setShowPix(true); }; const handlePixComplete = () => { toast({ title: "Pagamento concluído! ✅", description: "Seu agendamento está garantido." }); navigate("/"); }; // -------------------------------------------------------------- // 6️⃣ Renderização do pagamento via Pix (etapa final) // -------------------------------------------------------------- if (showPix && selectedService) { return ( <div className="min-h-screen bg-background"> <header className="sticky top-0 z-40 glass border-b border-border/50"> <div className="flex items-center gap-3 px-4 py-3"> <Button variant="ghost" size="icon-sm" onClick={() => setShowPix(false)}> <ArrowLeft className="h-5 w-5" /> </Button> <h1 className="text-lg font-semibold">Pagamento</h1> </div> </header> <div className="p-4"> <PixPaymentStep amount={selectedService.price} merchantName={barbershop.name} merchantCity="Sua Cidade" pixKey="12345678900" /> </div> </div> ); } // -------------------------------------------------------------- // 7️⃣ Renderização normal do fluxo de agendamento // -------------------------------------------------------------- return ( <div className="min-h-screen bg-background"> <header className="sticky top-0 z-40 glass border-b border-border/50"> <div className="flex items-center gap-3 px-4 py-3"> <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)}> <ArrowLeft className="h-5 w-5" /> </Button> <h1 className="text-lg font-semibold">Agendamento</h1> </div> </header> <main className="p-4 max-w-md mx-auto"> <StepIndicator steps={steps.map(s => s.label)} currentStep={step} /> <div className="mt-6"> {/* Serviço */} {step === 1 && ( <ServiceStep services={services} selectedId={selectedService?.id || null} onSelect={setSelectedService} /> )} {/* Profissional */} {step === 2 && ( <BarberStep barbers={barbers} selectedId={selectedBarber?.id || null} onSelect={setSelectedBarber} /> )} {/* Data */} {step === 3 && ( <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} /> )} {/* Horário */} {step === 4 && ( <TimeStep slots={selectedService && selectedDate ? generateTimeSlots(selectedService.duration_minutes, []) : []} selectedTime={selectedTime} onSelect={setSelectedTime} /> )} {/* Dados do cliente */} {step === 5 && ( <ClientInfoStep name={clientName} phone={clientPhone} onNameChange={setClientName} onPhoneChange={setClientPhone} /> )} {/* Confirmação */} {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && ( <ConfirmStep service={selectedService} barber={selectedBarber} date={selectedDate} time={selectedTime} clientName={clientName} clientPhone={clientPhone} /> )} </div> {/* Navegação entre etapas */} <div className="flex justify-between mt-6"> {step > 1 && ( <Button variant="outline" onClick={() => setStep(step - 1)}> Voltar </Button> )} {step < 6 && ( <Button className="ml-auto" onClick={() => { // Validações simples antes de avançar if (step === 1 && !selectedService) { toast({ title: "Selecione um serviço", variant: "destructive" }); return; } if (step === 2 && !selectedBarber) { toast({ title: "Selecione um profissional", variant: "destructive" }); return; } if (step === 3 && !selectedDate) { toast({ title: "Selecione uma data", variant: "destructive" }); return; } if (step === 4 && !selectedTime) { toast({ title: "Selecione um horário", variant: "destructive" }); return; } if (step === 5 && (!clientName || !clientPhone)) { toast({ title: "Preencha seus dados", variant: "destructive" }); return; } setStep(step + 1); }} > Avançar </Button> )} {step === 6 && ( <Button className="ml-auto" onClick={handleConfirm}> Confirmar Agendamento </Button> )} </div> </main> </div> ); }
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Calendar, Loader2, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StepIndicator } from "@/components/booking/StepIndicator";
+import { ServiceStep } from "@/components/booking/ServiceStep";
+import { BarberStep } from "@/components/booking/BarberStep";
+import { DateStep } from "@/components/booking/DateStep";
+import { TimeStep } from "@/components/booking/TimeStep";
+import { ClientInfoStep } from "@/components/booking/ClientInfoStep";
+import { ConfirmStep } from "@/components/booking/ConfirmStep";
+import { PixPaymentStep } from "@/components/booking/PixPaymentStep";
+import { BookingService, BookingBarber, findBarbershopBySlug, getServicesForBarbershop, getBarbersForBarbershop, isSlotStillAvailable, generateTimeSlots, addBookingAppointment } from "@/data/mockBookingData";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  return `${Math.floor(total / 60).toString().padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
+}
+
+export default function PublicBooking() {
+  // 1️⃣ Tipagem segura dos parâmetros da URL
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Estados do fluxo de agendamento
+  const [step, setStep] = useState(1);
+  const [barbershop, setBarbershop] = useState<any>(null);
+  const [services, setServices] = useState<BookingService[]>([]);
+  const [barbers, setBarbers] = useState<BookingBarber[]>([]);
+  const [selectedService, setSelectedService] = useState<BookingService | null>(null);
+  const [selectedBarber, setSelectedBarber] = useState<BookingBarber | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [showPix, setShowPix] = useState(false);
+  const [loading, setLoading] = useState(true); // Evita tela em branco enquanto os dados são carregados
+
+  // --------------------------------------------------------------
+  // 2️⃣ Carrega a barbearia pelo slug e, simultaneamente, os serviços
+  // --------------------------------------------------------------
+  useEffect(() => {
+    if (!slug) {
+      toast({
+        title: "Erro",
+        description: "Slug da barbearia não encontrado na URL.",
+        variant: "destructive",
+      });
+      navigate("/", { replace: true });
+      return;
+    }
+
+    const loadBarbershopAndServices = async () => {
+      setLoading(true);
+      try {
+        // ---- Busca a barbearia pelo slug ----
+        const { data: shopData, error: shopError } = await supabase
+          .from("barbershops")
+          .select("*")
+          .eq("slug", slug)
+          .single();
+
+        if (shopError || !shopData) {
+          console.error("Barbershop fetch error:", shopError);
+          toast({
+            title: "Erro",
+            description: "Barbearia não encontrada.",
+            variant: "destructive",
+          });
+          navigate("/", { replace: true });
+          setLoading(false);
+          return;
+        }
+
+        const shop = shopData;
+        setBarbershop(shop);
+
+        // ---- Busca os serviços ativos desta barbearia ----
+        const { data: servicesData, error: servicesError } = await supabase
+          .from("services")
+          .select("id, name, price, duration_minutes")
+          .eq("barbershop_id", shop.id) // filtro crítico
+          .eq("active", true) // só serviços ativos
+          .order("name");
+
+        if (servicesError) {
+          console.error("Services fetch error:", servicesError);
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar os serviços.",
+            variant: "destructive",
+          });
+        } else {
+          setServices(servicesData || []);
+        }
+
+        // ---- Busca os barbeiros desta barbearia ----
+        const { data: barbersData, error: barbersError } = await supabase
+          .from("professionals")
+          .select("id, name")
+          .eq("barbershop_id", shop.id)
+          .eq("active", true);
+
+        if (barbersError) {
+          console.error("Barbers fetch error:", barbersError);
+        } else {
+          setBarbers(barbersData || []);
+        }
+      } catch (err) {
+        console.error("Unexpected error in loadBarbershopAndServices:", err);
+        toast({
+          title: "Erro",
+          description: "Ocorreu um erro inesperado.",
+          variant: "destructive",
+        });
+        navigate("/", { replace: true });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBarbershopAndServices();
+  }, [slug, navigate, toast]);
+
+  // --------------------------------------------------------------
+  // 3️⃣ UI enquanto os dados estão sendo carregados
+  // --------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------
+  // 4️⃣ Caso a barbearia não tenha sido encontrada após o carregamento
+  // --------------------------------------------------------------
+  if (!barbershop) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-center p-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">Barbearia não encontrada</h1>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            Voltar ao Início
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------
+  // 5️⃣ Fluxo de etapas do agendamento (mantido inalterado)
+  // --------------------------------------------------------------
+  const steps = [
+    { label: "Serviço" },
+    { label: "Profissional" },
+    { label: "Data" },
+    { label: "Horário" },
+    { label: "Dados" },
+    { label: "Confirmação" },
+  ];
+
+  const handleConfirm = async () => {
+    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName.trim()) {
+      toast({ title: "Erro", description: "Preencha todos os dados obrigatórios.", variant: "destructive" });
+      return;
+    }
+
+    const stillAvailable = isSlotStillAvailable(
+      selectedBarber.id,
+      selectedDate.toISOString().split("T")[0],
+      selectedTime,
+      selectedService.duration_minutes
+    );
+    if (!stillAvailable) {
+      toast({ title: "Erro", description: "Este horário acabou de ser ocupado. Escolha outro.", variant: "destructive" });
+      return;
+    }
+
+    const newAppointment = {
+      id: `a_${Date.now()}`,
+      barber_id: selectedBarber.id,
+      date: selectedDate.toISOString().split("T")[0],
+      time: selectedTime,
+      duration_minutes: selectedService.duration_minutes,
+      status: "agendado",
+    };
+
+    addBookingAppointment(newAppointment);
+    toast({ title: "Agendamento confirmado! ✅", description: "Agora realize o pagamento via Pix." });
+    setShowPix(true);
+  };
+
+  const handlePixComplete = () => {
+    toast({ title: "Pagamento concluído! ✅", description: "Seu agendamento está garantido." });
+    navigate("/");
+  };
+
+  // --------------------------------------------------------------
+  // 6️⃣ Renderização do pagamento via Pix (etapa final)
+  // --------------------------------------------------------------
+  if (showPix && selectedService) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-40 glass border-b border-border/50">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Button variant="ghost" size="icon-sm" onClick={() => setShowPix(false)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-lg font-semibold">Pagamento</h1>
+          </div>
+        </header>
+        <div className="p-4">
+          <PixPaymentStep
+            amount={selectedService.price}
+            merchantName={barbershop.name}
+            merchantCity="Sua Cidade"
+            pixKey="12345678900" // Exemplo – substituir por chave real
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------
+  // 7️⃣ Renderização normal do fluxo de agendamento
+  // --------------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 glass border-b border-border/50">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">Agendamento</h1>
+        </div>
+      </header>
+
+      <main className="p-4 max-w-md mx-auto">
+        <StepIndicator steps={steps.map(s => s.label)} currentStep={step} />
+
+        <div className="mt-6">
+          {/* Serviço */}
+          {step === 1 && (
+            <ServiceStep
+              services={services}
+              selectedId={selectedService?.id || null}
+              onSelect={setSelectedService}
+            />
+          )}
+
+          {/* Profissional */}
+          {step === 2 && (
+            <BarberStep
+              barbers={barbers}
+              selectedId={selectedBarber?.id || null}
+              onSelect={setSelectedBarber}
+            />
+          )}
+
+          {/* Data */}
+          {step === 3 && (
+            <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} />
+          )}
+
+          {/* Horário */}
+          {step === 4 && (
+            <TimeStep
+              slots={selectedService && selectedDate
+                ? generateTimeSlots(selectedService.duration_minutes, [])
+                : []}
+              selectedTime={selectedTime}
+              onSelect={setSelectedTime}
+            />
+          )}
+
+          {/* Dados do cliente */}
+          {step === 5 && (
+            <ClientInfoStep
+              name={clientName}
+              phone={clientPhone}
+              onNameChange={setClientName}
+              onPhoneChange={setClientPhone}
+            />
+          )}
+
+          {/* Confirmação */}
+          {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && (
+            <ConfirmStep
+              service={selectedService}
+              barber={selectedBarber}
+              date={selectedDate}
+              time={selectedTime}
+              clientName={clientName}
+              clientPhone={clientPhone}
+            />
+          )}
+        </div>
+
+        {/* Navegação entre etapas */}
+        <div className="flex justify-between mt-6">
+          {step > 1 && (
+            <Button variant="outline" onClick={() => setStep(step - 1)}>
+              Voltar
+            </Button>
+          )}
+          {step < 6 && (
+            <Button
+              className="ml-auto"
+              onClick={() => {
+                // Validações simples antes de avançar
+                if (step === 1 && !selectedService) {
+                  toast({ title: "Selecione um serviço", variant: "destructive" });
+                  return;
+                }
+                if (step === 2 && !selectedBarber) {
+                  toast({ title: "Selecione um profissional", variant: "destructive" });
+                  return;
+                }
+                if (step === 3 && !selectedDate) {
+                  toast({ title: "Selecione uma data", variant: "destructive" });
+                  return;
+                }
+                if (step === 4 && !selectedTime) {
+                  toast({ title: "Selecione um horário", variant: "destructive" });
+                  return;
+                }
+                if (step === 5 && (!clientName || !clientPhone)) {
+                  toast({ title: "Preencha seus dados", variant: "destructive" });
+                  return;
+                }
+                setStep(step + 1);
+              }}
+            >
+              Avançar
+            </Button>
+          )}
+          {step === 6 && (
+            <Button className="ml-auto" onClick={handleConfirm}>
+              Confirmar Agendamento
+            </Button>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
