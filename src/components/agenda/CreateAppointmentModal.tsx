@@ -109,7 +109,7 @@ export function CreateAppointmentModal({
     }
     const query = searchQuery.toLowerCase();
     const filtered = clients.filter(c => 
-      c.name.toLowerCase().includes(query) ||       c.whatsapp.includes(query)
+      c.name.toLowerCase().includes(query) || c.whatsapp.includes(query)
     );
     setFilteredClients(filtered);
   }, [searchQuery, clients]);
@@ -180,7 +180,7 @@ export function CreateAppointmentModal({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar cliente..."
-                value={searchQuery || clientName}
+                value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setClientName(e.target.value);
@@ -269,7 +269,7 @@ export function CreateAppointmentModal({
             </div>
           )}
 
-          {/* Phone field (read-only when client is selected from autocomplete) */}
+          {/* Phone field - REMOVED DISABLED STATE */}
           <div className="space-y-2">
             <Label>Telefone</Label>
             <Input 
@@ -277,7 +277,6 @@ export function CreateAppointmentModal({
               onChange={(e) => setClientPhone(e.target.value)} 
               placeholder="(00) 00000-0000" 
               className="h-12 bg-secondary"
-              disabled={!!clientName && !!clientPhone}
             />
           </div>
 
