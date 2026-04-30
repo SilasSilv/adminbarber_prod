@@ -43,8 +43,7 @@ export default function PublicBooking() {
   const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
-  // Carrega a barbearia pelo slug
-  useEffect(() => {
+  // Carrega a barbearia pelo slug  useEffect(() => {
     if (!slug) {
       toast({
         title: "Erro",
@@ -79,8 +78,7 @@ export default function PublicBooking() {
         const shop = shopData;
         setBarbershop(shop);
 
-        // Busca os serviços ativos
-        const { data: servicesData, error: servicesError } = await supabase
+        // Busca os serviços ativos        const { data: servicesData, error: servicesError } = await supabase
           .from("services")
           .select("id, name, price, duration_minutes")
           .eq("barbershop_id", shop.id)
@@ -347,9 +345,7 @@ export default function PublicBooking() {
 
           {step === 4 && (
             <TimeStep
-              slots={selectedService && selectedDate
-                ? generateTimeSlots(selectedService.duration_minutes, occupiedSlots)
-                : []}
+              slots={generateTimeSlots(selectedService?.duration_minutes || 30, occupiedSlots)}
               selectedTime={selectedTime}
               onSelect={setSelectedTime}
               loading={loadingSlots}
@@ -380,8 +376,7 @@ export default function PublicBooking() {
         <div className="flex justify-between mt-6">
           {step > 1 && (
             <Button variant="outline" onClick={() => setStep(step - 1)}>
-              Voltar
-            </Button>
+              Voltar            </Button>
           )}
           {step < 6 && (
             <Button
@@ -427,37 +422,15 @@ export default function PublicBooking() {
   );
 }
 
-// Função auxiliar para gerar horários disponíveis (filtra ocupados)
+// Função auxiliar para gerar horários disponíveis (agora inclui todos e deixa a UI decidir)
 function generateTimeSlots(durationMinutes: number, occupiedSlots: { time: string; duration: number }[]): string[] {
   const slots: string[] = [];
   
   for (let hour = 8; hour <= 20; hour++) {
     const time = `${hour.toString().padStart(2, "0")}:00`;
-    const isOccupied = occupiedSlots.some((occ) => {
-      const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
-      const occEnd = occStart + occ.duration;
-      const slotStart = hour * 60;
-      const slotEnd = slotStart + durationMinutes;
-      return slotStart < occEnd && slotEnd > occStart;
-    });
-    
-    if (!isOccupied) {
-      slots.push(time);
-    }
-
+    slots.push(time);
     if (hour < 20) {
-      const time30 = `${hour.toString().padStart(2, "0")}:30`;
-      const isOccupied30 = occupiedSlots.some((occ) => {
-        const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
-        const occEnd = occStart + occ.duration;
-        const slotStart = hour * 60 + 30;
-        const slotEnd = slotStart + durationMinutes;
-        return slotStart < occEnd && slotEnd > occStart;
-      });
-      
-      if (!isOccupied30) {
-        slots.push(time30);
-      }
+      slots.push(`${hour.toString().padStart(2, "0")}:30`);
     }
   }
   return slots;
