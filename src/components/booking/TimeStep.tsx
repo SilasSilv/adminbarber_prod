@@ -7,10 +7,9 @@ interface TimeStepProps {
   selectedTime: string | null;
   onSelect: (time: string) => void;
   loading?: boolean;
-  occupiedSlots: { time: string; duration: number }[];
 }
 
-export function TimeStep({ slots, selectedTime, onSelect, loading, occupiedSlots }: TimeStepProps) {
+export function TimeStep({ slots, selectedTime, onSelect, loading }: TimeStepProps) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
@@ -19,9 +18,6 @@ export function TimeStep({ slots, selectedTime, onSelect, loading, occupiedSlots
       </div>
     );
   }
-
-  // Cria um Set com os horários já ocupados para busca rápida
-  const occupiedTimeSet = new Set(occupiedSlots.map(s => s.time));
 
   if (slots.length === 0) {
     return (
@@ -38,31 +34,33 @@ export function TimeStep({ slots, selectedTime, onSelect, loading, occupiedSlots
       <h2 className="text-lg font-semibold text-foreground">Escolha o horário</h2>
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
         {slots.map((time) => {
-          // Verifica se este horário está ocupado
-          const isOccupied = occupiedTimeSet.has(time);
+          // Verifica se o horário está ocupado (começa com "occupied:" ou tem badge)
+          const isOccupied = time.startsWith("occupied:");
+          const displayTime = isOccupied ? time.replace("occupied:", "") : time;
           
           return (
             <button
               key={time}
-              onClick={() => !isOccupied && onSelect(time)}
+              onClick={() => !isOccupied && onSelect(displayTime)}
               disabled={isOccupied}
               className={cn(
                 "py-3 px-2 rounded-lg border text-sm font-medium transition-all duration-200",
                 isOccupied
                   ? "border-border bg-muted/50 text-muted-foreground cursor-not-allowed opacity-60"
-                  : selectedTime === time
+                  : selectedTime === displayTime
                   ? "border-primary bg-primary text-primary-foreground shadow-md"
                   : "border-border bg-card text-foreground hover:border-primary/40 hover:shadow-sm"
               )}
             >
-              {time}
+              {displayTime}
               {isOccupied && (
                 <Badge variant="outline" className="ml-1 text-[10px] py-0 h-4 bg-destructive/10 text-destructive border-destructive/30">
                   Reservado
                 </Badge>
               )}
             </button>
-          );}
+          );
+        })}
       </div>
     </div>
   );
