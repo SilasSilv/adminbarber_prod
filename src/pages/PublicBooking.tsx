@@ -273,9 +273,8 @@ export default function PublicBooking() {
           />
           <div className="mt-4 space-y-3">
             <Button 
-              variant="gold" 
               size="lg" 
-              className="w-full gap-2"
+              className="w-full gap-2 bg-success text-success-foreground hover:bg-success/90"
               onClick={() => handleConfirm("pix")}
               disabled={saving}
             >
@@ -289,7 +288,7 @@ export default function PublicBooking() {
               )}
             </Button>
             <Button 
-              variant="outline" 
+              variant="gold" 
               size="lg" 
               className="w-full gap-2"
               onClick={() => handleConfirm("in_person")}
