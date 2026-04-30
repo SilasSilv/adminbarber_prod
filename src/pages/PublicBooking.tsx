@@ -40,6 +40,8 @@ export default function PublicBooking() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Carrega a barbearia pelo slug
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function PublicBooking() {
           .select("id, name, price, duration_minutes")
           .eq("barbershop_id", shop.id)
           .eq("active", true)
-          .order("name"); // CORREÇÃO: ordem correta aqui
+          .order("name");
 
         if (servicesError) {
           console.error("Services fetch error:", servicesError);
@@ -118,6 +120,47 @@ export default function PublicBooking() {
 
     loadBarbershopAndServices();
   }, [slug, navigate, toast]);
+
+  // Busca horários ocupados quando profissional e data mudam
+  useEffect(() => {
+    if (!barbershop || !selectedBarber || !selectedDate) {
+      setOccupiedSlots([]);
+      return;
+    }
+
+    const fetchOccupiedSlots = async () => {
+      setLoadingSlots(true);
+      const dateStr = selectedDate.toISOString().split("T")[0];
+      
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("start_time, end_time, status")
+        .eq("barbershop_id", barbershop.id)
+        .eq("professional_id", selectedBarber.id)
+        .eq("date", dateStr)
+        .not("status", "in", '("cancelado","faltou")');
+
+      if (error) {
+        console.error("Error fetching occupied slots:", error);
+        setOccupiedSlots([]);
+      } else {
+        const occupied = (data || []).map((apt: any) => ({
+          time: apt.start_time?.substring(0, 5) || "",
+          duration: (() => {
+            const start = apt.start_time?.substring(0, 5) || "00:00";
+            const end = apt.end_time?.substring(0, 5) || "00:00";
+            const [sh, sm] = start.split(":").map(Number);
+            const [eh, em] = end.split(":").map(Number);
+            return (eh * 60 + em) - (sh * 60 + sm);
+          })(),
+        }));
+        setOccupiedSlots(occupied);
+      }
+      setLoadingSlots(false);
+    };
+
+    fetchOccupiedSlots();
+  }, [barbershop, selectedBarber, selectedDate]);
 
   if (loading) {
     return (
@@ -230,7 +273,8 @@ export default function PublicBooking() {
           />
           <div className="mt-4 space-y-3">
             <Button 
-              variant="gold"               size="lg" 
+              variant="gold" 
+              size="lg" 
               className="w-full gap-2"
               onClick={() => handleConfirm("pix")}
               disabled={saving}
@@ -282,7 +326,8 @@ export default function PublicBooking() {
 
         <div className="mt-6">
           {step === 1 && (
-            <ServiceStep              services={services}
+            <ServiceStep
+              services={services}
               selectedId={selectedService?.id || null}
               onSelect={setSelectedService}
             />
@@ -303,10 +348,11 @@ export default function PublicBooking() {
           {step === 4 && (
             <TimeStep
               slots={selectedService && selectedDate
-                ? generateTimeSlots(selectedService.duration_minutes, [])
+                ? generateTimeSlots(selectedService.duration_minutes, occupiedSlots)
                 : []}
               selectedTime={selectedTime}
               onSelect={setSelectedTime}
+              loading={loadingSlots}
             />
           )}
 
@@ -334,7 +380,8 @@ export default function PublicBooking() {
         <div className="flex justify-between mt-6">
           {step > 1 && (
             <Button variant="outline" onClick={() => setStep(step - 1)}>
-              Voltar            </Button>
+              Voltar
+            </Button>
           )}
           {step < 6 && (
             <Button
@@ -380,14 +427,37 @@ export default function PublicBooking() {
   );
 }
 
-// Função auxiliar para gerar horários disponíveis (simplificada)
-function generateTimeSlots(durationMinutes: number, occupiedSlots: any[]): string[] {
+// Função auxiliar para gerar horários disponíveis (filtra ocupados)
+function generateTimeSlots(durationMinutes: number, occupiedSlots: { time: string; duration: number }[]): string[] {
   const slots: string[] = [];
+  
   for (let hour = 8; hour <= 20; hour++) {
     const time = `${hour.toString().padStart(2, "0")}:00`;
-    slots.push(time);
+    const isOccupied = occupiedSlots.some((occ) => {
+      const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
+      const occEnd = occStart + occ.duration;
+      const slotStart = hour * 60;
+      const slotEnd = slotStart + durationMinutes;
+      return slotStart < occEnd && slotEnd > occStart;
+    });
+    
+    if (!isOccupied) {
+      slots.push(time);
+    }
+
     if (hour < 20) {
-      slots.push(`${hour.toString().padStart(2, "0")}:30`);
+      const time30 = `${hour.toString().padStart(2, "0")}:30`;
+      const isOccupied30 = occupiedSlots.some((occ) => {
+        const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
+        const occEnd = occStart + occ.duration;
+        const slotStart = hour * 60 + 30;
+        const slotEnd = slotStart + durationMinutes;
+        return slotStart < occEnd && slotEnd > occStart;
+      });
+      
+      if (!isOccupied30) {
+        slots.push(time30);
+      }
     }
   }
   return slots;
