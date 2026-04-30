@@ -83,7 +83,7 @@ export default function PublicBooking() {
           .select("id, name, price, duration_minutes")
           .eq("barbershop_id", shop.id)
           .eq("active", true)
-          .order("name.order("name");
+          .order("name"); // CORREÇÃO: ordem correta aqui
 
         if (servicesError) {
           console.error("Services fetch error:", servicesError);
@@ -230,8 +230,7 @@ export default function PublicBooking() {
           />
           <div className="mt-4 space-y-3">
             <Button 
-              variant="gold" 
-              size="lg" 
+              variant="gold"               size="lg" 
               className="w-full gap-2"
               onClick={() => handleConfirm("pix")}
               disabled={saving}
@@ -283,8 +282,7 @@ export default function PublicBooking() {
 
         <div className="mt-6">
           {step === 1 && (
-            <ServiceStep
-              services={services}
+            <ServiceStep              services={services}
               selectedId={selectedService?.id || null}
               onSelect={setSelectedService}
             />
@@ -336,8 +334,7 @@ export default function PublicBooking() {
         <div className="flex justify-between mt-6">
           {step > 1 && (
             <Button variant="outline" onClick={() => setStep(step - 1)}>
-              Voltar
-            </Button>
+              Voltar            </Button>
           )}
           {step < 6 && (
             <Button
