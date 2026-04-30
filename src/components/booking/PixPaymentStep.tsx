@@ -151,4 +151,8 @@ export function PixPaymentStep({ amount, merchantName, merchantCity, pixKey }: P
           }}
           disabled={isExpired}
         >
+
+      </div>
+    </div>
+  );
 }
