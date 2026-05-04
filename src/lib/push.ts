@@ -1,7 +1,6 @@
 // Helper: registra service worker e faz subscribe em Web Push para lembrete.
 import { supabase } from "@/integrations/supabase/client";
 
-// VAPID public key (segura para expor no frontend)
 const VAPID_PUBLIC_KEY =
   "BEYenkyFK8yKj-Khk8l6n4D6Dkbc63s_h5uU0-D6NvBIiEpVL-DHTwRNrRxaRrGidh2a72UAEduHwndEaPlV8H4";
 
@@ -23,27 +22,38 @@ export function isPushSupported(): boolean {
   );
 }
 
-/**
- * Pede permissão e registra subscription para o appointment.
- * Retorna true se gravou com sucesso.
- */
 export async function subscribeToReminder(appointmentId: string): Promise<boolean> {
   try {
     if (!isPushSupported()) return false;
 
+    // ✅ FIX 1: Só pede permissão após gesto explícito do usuário (esta
+    // função deve ser chamada DENTRO de um onClick — não em useEffect ou
+    // ao montar o componente. O browser bloqueia requestPermission() que
+    // não origina de um evento de clique.)
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return false;
 
-    const reg =
-      (await navigator.serviceWorker.getRegistration()) ||
-      (await navigator.serviceWorker.register("/sw.js"));
+    // ✅ FIX 2: Garante que o SW está registrado antes de continuar.
+    // getRegistration() retorna undefined se nenhum SW está ativo ainda.
+    // A ordem correta é: tentar pegar o existente, senão registrar um novo,
+    // e só então aguardar o ready (que retorna o registro ativo).
+    let reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    if (!reg) {
+      reg = await navigator.serviceWorker.register("/sw.js");
+    }
+    // Aguarda o SW estar completamente ativo
     await navigator.serviceWorker.ready;
 
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
+        // ✅ FIX 3: Passa a Uint8Array diretamente — NÃO use .buffer.
+        // Uint8Array é o tipo correto para applicationServerKey.
+        // Ao usar .buffer você extrai o ArrayBuffer subjacente, que perde
+        // o offset/length da view e pode causar a chave VAPID ser inválida,
+        // resultando em DOMException e bloqueio da subscription.
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
     }
 
@@ -52,7 +62,6 @@ export async function subscribeToReminder(appointmentId: string): Promise<boolea
       keys?: { p256dh?: string; auth?: string };
     };
 
-    // Usar a URL correta da Edge Function
     const { error } = await supabase.functions.invoke("save-push-subscription", {
       body: {
         appointment_id: appointmentId,
