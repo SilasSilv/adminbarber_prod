@@ -52,6 +52,7 @@ export async function subscribeToReminder(appointmentId: string): Promise<boolea
       keys?: { p256dh?: string; auth?: string };
     };
 
+    // Usar a URL correta da Edge Function
     const { error } = await supabase.functions.invoke("save-push-subscription", {
       body: {
         appointment_id: appointmentId,
