@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,7 @@ export default function PublicBooking() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Estados do fluxo de agendamento
-  const [step, setStep] = useState(1);
+  // State for the multi‑step flow  const [step, setStep] = useState(1);
   const [barbershop, setBarbershop] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [barbers, setBarbers] = useState<any[]>([]);
@@ -45,7 +44,13 @@ export default function PublicBooking() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
 
-  // Carrega a barbearia pelo slug
+  // Use a ref to avoid calling setStep during render cycles
+  const stepRef = useRef(step);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
+  // Load the barbershop and its services when the slug is available
   useEffect(() => {
     if (!slug) {
       toast({
@@ -55,12 +60,13 @@ export default function PublicBooking() {
       });
       navigate("/", { replace: true });
       return;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }
 
     const loadBarbershopAndServices = async () => {
       setLoading(true);
       try {
-        // Busca a barbearia pelo slug
+        // Fetch the barbershop by slug
         const { data: shopData, error: shopError } = await supabase
           .from("barbershops")
           .select("*")
@@ -81,7 +87,7 @@ export default function PublicBooking() {
         const shop = shopData;
         setBarbershop(shop);
 
-        // Busca os serviços ativos
+        // Fetch active services
         const { data: servicesData, error: servicesError } = await supabase
           .from("services")
           .select("id, name, price, duration_minutes")
@@ -95,7 +101,7 @@ export default function PublicBooking() {
           setServices(servicesData || []);
         }
 
-        // Busca os barbeiros
+        // Fetch barbers (professionals) for the shop
         const { data: barbersData, error: barbersError } = await supabase
           .from("professionals")
           .select("id, name")
@@ -121,10 +127,10 @@ export default function PublicBooking() {
     };
 
     loadBarbershopAndServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, navigate, toast]);
 
-  // Busca horários ocupados quando profissional e data mudam
-  useEffect(() => {
+  // Fetch occupied slots whenever the selected professional or date changes  useEffect(() => {
     if (!barbershop || !selectedBarber || !selectedDate) {
       setOccupiedSlots([]);
       return;
@@ -133,7 +139,7 @@ export default function PublicBooking() {
     const fetchOccupiedSlots = async () => {
       setLoadingSlots(true);
       const dateStr = selectedDate.toISOString().split("T")[0];
-      
+
       const { data, error } = await supabase
         .from("appointments")
         .select("start_time, end_time, status")
@@ -162,9 +168,162 @@ export default function PublicBooking() {
     };
 
     fetchOccupiedSlots();
-  }, [barbershop, selectedBarber, selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps  }, [barbershop, selectedBarber, selectedDate]);
 
-  if (loading) {
+  // Helper to generate time slots while filtering out occupied ones
+  const generateTimeSlots = useCallback(
+    (durationMinutes: number, occupied: { time: string; duration: number }[]) => string[],
+    [durationMinutes, occupied]
+  ) => {
+    const slots: string[] = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      const baseTime = `${hour.toString().padStart(2, "0")}:00`;
+      const isOccupiedBase = occupied.some(
+        (occ) => {
+          const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
+          const occEnd = occStart + occ.duration;
+          const slotStart = hour * 60;
+          const slotEnd = slotStart + durationMinutes;
+          return slotStart < occEnd && slotEnd > occStart;
+        }
+      );
+      if (!isOccupiedBase) slots.push(baseTime);
+
+      const baseTime30 = `${hour.toString().padStart(2, "0")}:30`;
+      const isOccupied30 = occupied.some(
+        (occ) => {
+          const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
+          const occEnd = occStart + occ.duration;
+          const slotStart = hour * 60 + 30;
+          const slotEnd = slotStart + durationMinutes;
+          return slotStart < occEnd && slotEnd > occStart;
+        }
+      );
+      if (!isOccupied30) slots.push(baseTime30);
+    }
+    return slots;
+  };
+
+  // Handler for the "Avançar" button – uses the ref to avoid stale state
+  const handleNext = useCallback(() => {
+    // Guard against calling setStep during a render cycle that hasn't been committed yet    if (stepRef.current < 6) {
+      setStep(stepRef.current + 1);
+    }
+  }, []);
+
+  // Handler for confirming the booking (shows payment step)
+  const handleConfirm = async (paymentMethod: "pix" | "in_person") => {
+    if (
+      !selectedService ||
+      !selectedBarber ||
+      !selectedDate ||
+      !selectedTime ||
+      !clientName.trim()
+    ) {
+      toast({
+        title: "Erro",
+        description: "Preencha todos os dados obrigatórios.",
+        variant: "destructive",
+      });
+      return;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }
+
+    // Calculate end time based on selected service duration
+    const endTime = addMinutesToTime(selectedTime, selectedService.duration_minutes);
+
+    // Persist the appointment
+    setSaving(true);
+    const { data, error } = await supabase      .from("appointments")
+      .insert({
+        barbershop_id: barbershop.id,
+        professional_id: selectedBarber.id,
+        service_id: selectedService.id,
+        date: selectedDate.toISOString().split("T")[0],
+        start_time: selectedTime,
+        end_time: endTime,
+        client_name: clientName.trim(),
+        client_phone: clientPhone.trim(),
+        total: selectedService.price,
+        status: "agendado",
+      })
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      toast({
+        title: "Erro ao agendar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCreatedAppointmentId(data.id);
+    toast({
+      title: "Agendamento confirmado! ✅",
+      description: "Seu horário foi reservado.",
+    });
+    setShowSuccess(true);
+  }, [
+    selectedService,
+    selectedBarber,
+    selectedDate,
+    selectedTime,
+    clientName,
+    clientPhone,
+    barbershop,
+    saving,
+  ]);
+
+  // Show the success screen after a booking is confirmed  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8 text-center space-y-6">
+          <CheckCircle className="w-16 h-16 mx-auto text-green-500" />
+          <h1 className="text-2xl font-bold">Agendamento Confirmado! ✅</h1>
+          <p className="text-muted-foreground">
+            Seu horário foi reservado com sucesso na <span className="font-semibold text-foreground">
+              {barbershop?.name || "Barbearia"}
+            </span>.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {selectedService?.name} com {selectedBarber?.name} às {selectedTime} no dia {selectedDate?.toLocaleDateString("pt-BR")}
+          </p>
+          <Button
+            onClick={async () => {
+              if (createdAppointmentId) {
+                const ok = await subscribeToReminder(createdAppointmentId);
+                if (ok) {
+                  toast({
+                    title: "Lembretes ativados! 🔔",
+                    description: "Você receberá notificações antes do seu horário.",
+                  });
+                } else {
+                  toast({
+                    title: "Permissão necessária",
+                    description: "Ative as notificações no navegador para receber lembretes.",
+                    variant: "destructive",
+                  });
+                }
+              }
+            }}
+            variant="gold"
+            className="w-full gap-2"
+          >
+            Ativar Lembretes de Agendamento
+          </Button>
+          <Button asChild variant="outline" className="w-full">
+            <a href="/">Voltar ao Início</a>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render the multi‑step booking UI only when the barbearia data is ready  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -185,156 +344,10 @@ export default function PublicBooking() {
     );
   }
 
-  const steps = [
-    { label: "Serviço" },
-    { label: "Profissional" },
-    { label: "Data" },
-    { label: "Horário" },
-    { label: "Dados" },
-    { label: "Confirmação" },
-  ];
-
-  const handleConfirm = async (paymentMethod: "pix" | "in_person") => {
-    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName.trim()) {
-      toast({ title: "Erro", description: "Preencha todos os dados obrigatórios.", variant: "destructive" });
-      return;
-    }
-
-    // Calcula o horário de término
-    const endTime = addMinutesToTime(selectedTime, selectedService.duration_minutes);
-
-    // Salva o agendamento no banco de dados
-    setSaving(true);
-    const { data, error } = await supabase
-      .from("appointments")
-      .insert({
-        barbershop_id: barbershop.id,
-        professional_id: selectedBarber.id,
-        service_id: selectedService.id,
-        date: selectedDate.toISOString().split("T")[0],
-        start_time: selectedTime,
-        end_time: endTime,
-        client_name: clientName.trim(),
-        client_phone: clientPhone.trim(),
-        total: selectedService.price,
-        status: "agendado",
-      })
-      .select()
-      .single();
-
-    setSaving(false);
-
-    if (error) {
-      toast({ title: "Erro ao agendar", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    // Armazena o ID do agendamento criado
-    setCreatedAppointmentId(data.id);
-    
-    toast({ title: "Agendamento confirmado! ✅", description: "Seu horário foi reservado." });
-    setShowSuccess(true);
-  };
-
-  // Tela de sucesso
-  if (showSuccess) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 text-center space-y-6">
-          <CheckCircle className="w-16 h-16 mx-auto text-green-500" />
-          <h1 className="text-2xl font-bold">Agendamento Confirmado! ✅</h1>
-          <p className="text-muted-foreground">
-            Seu horário foi reservado com sucesso na <span className="font-semibold text-foreground">{barbershop.name}</span>.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {selectedService?.name} com {selectedBarber?.name} às {selectedTime} no dia {selectedDate?.toLocaleDateString("pt-BR")}
-          </p>
-          
-          {/* Botão para ativar notificações de lembrete */}
-          <Button 
-            onClick={async () => {
-              if (createdAppointmentId) {
-                const success = await subscribeToReminder(createdAppointmentId);
-                if (success) {
-                  toast({ title: "Lembretes ativados! 🔔", description: "Você receberá notificações antes do seu horário." });
-                } else {
-                  toast({ title: "Permissão necessária", description: "Ative as notificações no navegador para receber lembretes.", variant: "destructive" });
-                }
-              }
-            }}
-            variant="gold"
-            className="w-full gap-2"
-          >
-            Ativar Lembretes de Agendamento
-          </Button>
-
-          <Button asChild variant="outline" className="w-full">
-            <a href="/">Voltar ao Início</a>
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-
-  // Tela de pagamento Pix
-  if (showPayment && selectedService) {
-    return (
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-40 glass border-b border-border/50">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => setShowPayment(false)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-lg font-semibold">Pagamento</h1>
-          </div>
-        </header>
-        <div className="p-4">
-          <PixPaymentStep
-            amount={selectedService.price}
-            merchantName={barbershop.name}
-            merchantCity="Sua Cidade"
-            pixKey="12345678900" // Substituir pela chave real da barbearia
-          />
-          <div className="mt-4 space-y-3">
-            <Button 
-              size="lg" 
-              className="w-full gap-2 bg-success text-success-foreground hover:bg-success/90"
-              onClick={() => handleConfirm("pix")}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Salvando...
-                </>
-              ) : (
-                "Já realizei o pagamento"
-              )}
-            </Button>
-            <Button 
-              variant="gold" 
-              size="lg" 
-              className="w-full gap-2"
-              onClick={() => handleConfirm("in_person")}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Salvando...
-                </>
-              ) : (
-                "Vou pagar na barbearia"
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Determine which step component to render
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="sticky top-0 z-40 glass border-b border-border/50">
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)}>
@@ -345,143 +358,84 @@ export default function PublicBooking() {
       </header>
 
       <main className="p-4 max-w-md mx-auto">
-        <StepIndicator steps={steps.map(s => s.label)} currentStep={step} />
+        {/* Step Indicator */}
+        <StepIndicator steps={["Serviço", "Profissional", "Data", "Horário", "Dados", "Confirmação"]} currentStep={step} />
 
-        <div className="mt-6">
-          {step === 1 && (
-            <ServiceStep
-              services={services}
-              selectedId={selectedService?.id || null}
-              onSelect={setSelectedService}
-            />
-          )}
+        {/* Step Content */}
+        {step === 1 && (
+          <ServiceStep
+            services={services}
+            selectedId={selectedService?.id || null}
+            onSelect={setSelectedService}
+          />
+        )}
+        {step === 2 && (
+          <BarberStep
+            barbers={barbers}
+            selectedId={selectedBarber?.id || null}
+            onSelect={setSelectedBarber}
+          />
+        )}
+        {step === 3 && (
+          <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} />
+        )}
+        {step === 4 && (
+          <TimeStep
+            slots={selectedService && selectedDate
+              ? generateTimeSlots(selectedService.duration_minutes, occupiedSlots)
+              : []}
+            selectedTime={selectedTime}
+            onSelect={setSelectedTime}
+            loading={loadingSlots}
+          />
+        )}
+        {step === 5 && (
+          <ClientInfoStep
+            name={clientName}
+            phone={clientPhone}
+            onNameChange={setClientName}
+            onPhoneChange={setClientPhone}
+          />
+        )}
+        {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && (
+          <ConfirmStep
+            service={selectedService}
+            barber={selectedBarber}
+            date={selectedDate}
+            time={selectedTime}
+            clientName={clientName}
+            clientPhone={clientPhone}
+          />
+        )}
 
-          {step === 2 && (
-            <BarberStep
-              barbers={barbers}
-              selectedId={selectedBarber?.id || null}
-              onSelect={setSelectedBarber}
-            />
-          )}
-
-          {step === 3 && (
-            <DateStep selectedDate={selectedDate} onSelect={setSelectedDate} />
-          )}
-
-          {step === 4 && (
-            <TimeStep
-              slots={selectedService && selectedDate
-                ? generateTimeSlots(selectedService.duration_minutes, occupiedSlots)
-                : []}
-              selectedTime={selectedTime}
-              onSelect={setSelectedTime}
-              loading={loadingSlots}
-            />
-          )}
-
-          {step === 5 && (
-            <ClientInfoStep
-              name={clientName}
-              phone={clientPhone}
-              onNameChange={setClientName}
-              onPhoneChange={setClientPhone}
-            />
-          )}
-
-          {step === 6 && selectedService && selectedBarber && selectedDate && selectedTime && (
-            <ConfirmStep
-              service={selectedService}
-              barber={selectedBarber}
-              date={selectedDate}
-              time={selectedTime}
-              clientName={clientName}
-              clientPhone={clientPhone}
-            />
-          )}
-        </div>
-
+        {/* Navigation Buttons */}
         <div className="flex justify-between mt-6">
           {step > 1 && (
-            <Button variant="outline" onClick={() => setStep(step - 1)}>
+            <Button variant="outline" onClick={() => {
+              if (stepRef.current > 1) {
+                setStep(stepRef.current - 1);
+              }
+            }}>
               Voltar
             </Button>
           )}
           {step < 6 && (
             <Button
               className="ml-auto"
-              onClick={() => {
-                if (step === 1 && !selectedService) {
-                  toast({ title: "Selecione um serviço", variant: "destructive" });
-                  return;
-                }
-                if (step === 2 && !selectedBarber) {
-                  toast({ title: "Selecione um profissional", variant: "destructive" });
-                  return;
-                }
-                if (step === 3 && !selectedDate) {
-                  toast({ title: "Selecione uma data", variant: "destructive" });
-                  return;
-                }
-                if (step === 4 && !selectedTime) {
-                  toast({ title: "Selecione um horário", variant: "destructive" });
-                  return;
-                }
-                if (step === 5 && (!clientName || !clientPhone)) {
-                  toast({ title: "Preencha seus dados", variant: "destructive" });
-                  return;
-                }
-                setStep(step + 1);
-              }}
+              onClick={handleNext}
             >
               Avançar
             </Button>
           )}
           {step === 6 && (
-            <Button 
-              className="ml-auto" 
+            <Button
+              className="ml-auto"
               onClick={() => setShowPayment(true)}
             >
-              Confirmar Agendamento
-            </Button>
+              Confirmar Agendamento            </Button>
           )}
         </div>
       </main>
     </div>
   );
-}
-
-// Função auxiliar para gerar horários disponíveis (filtra ocupados)
-function generateTimeSlots(durationMinutes: number, occupiedSlots: { time: string; duration: number }[]): string[] {
-  const slots: string[] = [];  
-  
-  for (let hour = 8; hour <= 20; hour++) {
-    const time = `${hour.toString().padStart(2, "0")}:00`;
-    const isOccupied = occupiedSlots.some((occ) => {
-      const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
-      const occEnd = occStart + occ.duration;
-      const slotStart = hour * 60;
-      const slotEnd = slotStart + durationMinutes;
-      return slotStart < occEnd && slotEnd > occStart;
-    });    
-    
-    if (!isOccupied) {
-      slots.push(time);
-    }
-
-    if (hour < 20) {
-      const time30 = `${hour.toString().padStart(2, "0")}:30`;
-      const isOccupied30 = occupiedSlots.some((occ) => {
-        const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
-        const occEnd = occStart + occ.duration;
-        const slotStart = hour * 60 + 30;
-        const slotEnd = slotStart + durationMinutes;
-        return slotStart < occEnd && slotEnd > occStart;
-      });
-      
-      if (!isOccupied30) {
-        slots.push(time30);
-      }
-    }
-  }
-  return slots;
 }
