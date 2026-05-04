@@ -1,22 +1,20 @@
+// Helper: registra service worker e faz subscribe em Web Push para lembrete.
 import { supabase } from "@/integrations/supabase/client";
 
-// VAPID public key (deve estar no .env ou hardcoded se for teste)
-const VAPID_PUBLIC_KEY = "BEYenkyFK8yKj-Khk8l6n4D6Dkbc63s_h5uU0-D6NvBIiEpVL-DHTwRNrRxaRrGidh2a72UAEduHwndEaPlV8H4";
+// VAPID public key (segura para expor no frontend)
+const VAPID_PUBLIC_KEY =
+  "BEYenkyFK8yKj-Khk8l6n4D6Dkbc63s_h5uU0-D6NvBIiEpVL-DHTwRNrRxaRrGidh2a72UAEduHwndEaPlV8H4";
 
-// Helper para converter base64 para Uint8Array (necessário para o VAPID key)
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = window.atob(base64);
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; ++i) {
-    output[i] = raw.charCodeAt(i);
-  }
-  return output;
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
-// Verifica se o navegador suporta Push Notifications e Service Workers
-function isPushSupported(): boolean {
+export function isPushSupported(): boolean {
   return (
     typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
@@ -26,54 +24,52 @@ function isPushSupported(): boolean {
 }
 
 /**
- * Pede permissão, registra o Service Worker e salva a subscription no Supabase
- * vinculada ao appointmentId para receber lembretes.
+ * Pede permissão e registra subscription para o appointment.
+ * Retorna true se gravou com sucesso.
  */
 export async function subscribeToReminder(appointmentId: string): Promise<boolean> {
   try {
-    if (!isPushSupported()) {
-      console.warn("Push notifications not supported in this browser.");
-      return false;
-    }
+    if (!isPushSupported()) return false;
 
-    // 1. Pede permissão para enviar notificações
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.warn("Notification permission denied.");
-      return false;
-    }
+    if (permission !== "granted") return false;
 
-    // 2. Registra o Service Worker
-    const registration = await navigator.serviceWorker.ready;
+    const reg =
+      (await navigator.serviceWorker.getRegistration()) ||
+      (await navigator.serviceWorker.register("/sw.js"));
+    await navigator.serviceWorker.ready;
 
-    // 3. Verifica se já existe uma subscription ativa
-    let subscription = await registration.pushManager.getSubscription();
-
-    // 4. Se não existir, cria uma nova usando a VAPID public key
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
       });
     }
 
-    // 5. Envia a subscription para a Edge Function do Supabase salvar
-    const { data, error } = await supabase.functions.invoke("save-push-subscription", {
+    const json = sub.toJSON() as {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+    };
+
+    // Usar a URL correta da Edge Function
+    const { error } = await supabase.functions.invoke("save-push-subscription", {
       body: {
         appointment_id: appointmentId,
-        subscription: subscription.toJSON(),
+        subscription: {
+          endpoint: json.endpoint,
+          keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+        },
       },
     });
 
     if (error) {
-      console.error("Error saving push subscription:", error);
+      console.error("save-push-subscription error:", error);
       return false;
     }
-
-    console.log("Push subscription saved successfully:", data);
     return true;
-  } catch (error) {
-    console.error("Unexpected error in subscribeToReminder:", error);
+  } catch (e) {
+    console.error("subscribeToReminder error:", e);
     return false;
   }
 }
