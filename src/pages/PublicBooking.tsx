@@ -26,7 +26,8 @@ export default function PublicBooking() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // State for the multi‑step flow  const [step, setStep] = useState(1);
+  // State for the multi‑step flow
+  const [step, setStep] = useState(1);
   const [barbershop, setBarbershop] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [barbers, setBarbers] = useState<any[]>([]);
@@ -60,7 +61,6 @@ export default function PublicBooking() {
       });
       navigate("/", { replace: true });
       return;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }
 
     const loadBarbershopAndServices = async () => {
@@ -127,10 +127,10 @@ export default function PublicBooking() {
     };
 
     loadBarbershopAndServices();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, navigate, toast]);
 
-  // Fetch occupied slots whenever the selected professional or date changes  useEffect(() => {
+  // Fetch occupied slots whenever the selected professional or date changes
+  useEffect(() => {
     if (!barbershop || !selectedBarber || !selectedDate) {
       setOccupiedSlots([]);
       return;
@@ -168,65 +168,54 @@ export default function PublicBooking() {
     };
 
     fetchOccupiedSlots();
-    // eslint-disable-next-line react-hooks/exhaustive-deps  }, [barbershop, selectedBarber, selectedDate]);
+  }, [barbershop, selectedBarber, selectedDate]);
 
   // Helper to generate time slots while filtering out occupied ones
   const generateTimeSlots = useCallback(
-    (durationMinutes: number, occupied: { time: string; duration: number }[]) => string[],
-    [durationMinutes, occupied]
-  ) => {
-    const slots: string[] = [];
-    for (let hour = 8; hour <= 20; hour++) {
-      const baseTime = `${hour.toString().padStart(2, "0")}:00`;
-      const isOccupiedBase = occupied.some(
-        (occ) => {
+    (durationMinutes: number, occupied: { time: string; duration: number }[]) => {
+      const slots: string[] = [];
+      for (let hour = 8; hour <= 20; hour++) {
+        const baseTime = `${hour.toString().padStart(2, "0")}:00`;
+        const isOccupiedBase = occupied.some((occ) => {
           const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
           const occEnd = occStart + occ.duration;
           const slotStart = hour * 60;
           const slotEnd = slotStart + durationMinutes;
           return slotStart < occEnd && slotEnd > occStart;
-        }
-      );
-      if (!isOccupiedBase) slots.push(baseTime);
+        });
+        if (!isOccupiedBase) slots.push(baseTime);
 
-      const baseTime30 = `${hour.toString().padStart(2, "0")}:30`;
-      const isOccupied30 = occupied.some(
-        (occ) => {
+        const baseTime30 = `${hour.toString().padStart(2, "0")}:30`;
+        const isOccupied30 = occupied.some((occ) => {
           const occStart = parseInt(occ.time.split(":")[0]) * 60 + parseInt(occ.time.split(":")[1]);
           const occEnd = occStart + occ.duration;
           const slotStart = hour * 60 + 30;
           const slotEnd = slotStart + durationMinutes;
           return slotStart < occEnd && slotEnd > occStart;
-        }
-      );
-      if (!isOccupied30) slots.push(baseTime30);
-    }
-    return slots;
-  };
+        });
+        if (!isOccupied30) slots.push(baseTime30);
+      }
+      return slots;
+    },
+    []
+  );
 
   // Handler for the "Avançar" button – uses the ref to avoid stale state
   const handleNext = useCallback(() => {
-    // Guard against calling setStep during a render cycle that hasn't been committed yet    if (stepRef.current < 6) {
+    if (stepRef.current < 6) {
       setStep(stepRef.current + 1);
     }
   }, []);
 
   // Handler for confirming the booking (shows payment step)
   const handleConfirm = async (paymentMethod: "pix" | "in_person") => {
-    if (
-      !selectedService ||
-      !selectedBarber ||
-      !selectedDate ||
-      !selectedTime ||
-      !clientName.trim()
-    ) {
+    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName.trim()) {
       toast({
         title: "Erro",
         description: "Preencha todos os dados obrigatórios.",
         variant: "destructive",
       });
       return;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }
 
     // Calculate end time based on selected service duration
@@ -234,7 +223,8 @@ export default function PublicBooking() {
 
     // Persist the appointment
     setSaving(true);
-    const { data, error } = await supabase      .from("appointments")
+    const { data, error } = await supabase
+      .from("appointments")
       .insert({
         barbershop_id: barbershop.id,
         professional_id: selectedBarber.id,
@@ -267,18 +257,10 @@ export default function PublicBooking() {
       description: "Seu horário foi reservado.",
     });
     setShowSuccess(true);
-  }, [
-    selectedService,
-    selectedBarber,
-    selectedDate,
-    selectedTime,
-    clientName,
-    clientPhone,
-    barbershop,
-    saving,
-  ]);
+  };
 
-  // Show the success screen after a booking is confirmed  if (showSuccess) {
+  // Show the success screen after a booking is confirmed
+  if (showSuccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md p-8 text-center space-y-6">
@@ -323,7 +305,8 @@ export default function PublicBooking() {
     );
   }
 
-  // Render the multi‑step booking UI only when the barbearia data is ready  if (loading) {
+  // Render the multi‑step booking UI only when the barbearia data is ready
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
