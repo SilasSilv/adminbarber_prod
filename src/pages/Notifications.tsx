@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useSupabaseClient } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +8,11 @@ import { cn } from "@/lib/utils";
 import { useBarbershop } from "@/context/BarbershopContext";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns-tz";
+import { supabase } from "@/integrations/supabase/client";
 
 type Tab = "pendentes" | "enviadas" | "falhas";
 
 export default function Notifications() {
-  const supabase = useSupabaseClient();
   const { barbershop } = useBarbershop();
   const { user } = useAuth();
   const { toast } = useToast();
