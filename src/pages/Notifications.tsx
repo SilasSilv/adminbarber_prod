@@ -45,7 +45,10 @@ export default function Notifications() {
         setNotifications(data ?? []);
       }
       setLoading(false);
-    }, [tab, barbershop, user]);
+    };
+
+    fetch();
+  }, [tab, barbershop, user]);
 
   const formatZoned = (utc: string) => {
     const d = new Date(utc);
