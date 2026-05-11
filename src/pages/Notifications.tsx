@@ -132,7 +132,8 @@ export default function Notifications() {
                 </Button>
               )}
             </div>
-        ) as any}
+          )
+        }))}
       />
     </div>
   );
