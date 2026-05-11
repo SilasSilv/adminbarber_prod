@@ -8,7 +8,6 @@ import { useBarbershop } from "@/context/BarbershopContext";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-
 import { subscribeToReminder } from "@/lib/push";
 
 export default function Dashboard() {
