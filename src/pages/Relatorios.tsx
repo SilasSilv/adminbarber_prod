@@ -49,7 +49,8 @@ export default function Relatorios() {
 
         if (txnError) throw txnError;
 
-        // 3️⃣ Get services for top service calculation        const { data: services, error: svcError } = await supabase
+        // 3️⃣ Get services for top service calculation
+        const { data: services, error: svcError } = await supabase
           .from("services")
           .select("id, name, price")
           .eq("barbershop_id", barbershop.id)
