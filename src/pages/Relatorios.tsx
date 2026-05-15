@@ -123,7 +123,7 @@ export default function Relatorios() {
             value: serviceStats[0].service,
             icon: <Scissors className="h-5 w-5" />,
             trend: { value: serviceStats[0].count, positive: true }
-          } : [])
+          }] : [])
         ]);
 
         setError(null);
