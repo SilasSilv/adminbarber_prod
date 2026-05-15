@@ -47,7 +47,7 @@ export default function Products() {
     const { data } = await supabase
       .from("products")
       .select("*")
-      .eq("barbershop_id", barbershop.id) // CRITICAL: filter by barbershop_id
+      .eq("barbershop_id", barbershop.id)
       .order("name");
     setProducts(
       (data || []).map((p: any) => ({
@@ -95,7 +95,7 @@ export default function Products() {
       price: parseFloat(price) || 0,
       stock: stock ? parseInt(stock) : null,
       description: description.trim() || null,
-      barbershop_id: barbershop.id, // CRITICAL: set barbershop_id
+      barbershop_id: barbershop.id,
     };
 
     if (editing) {
@@ -111,7 +111,10 @@ export default function Products() {
   };
 
   const toggleActive = async (product: Product) => {
-    await supabase.from("products").update({ active: !product.active }).eq("id", product.id);
+    await supabase
+      .from("products")
+      .update({ active: !product.active })
+      .eq("id", product.id);
     fetchProducts();
   };
 
@@ -151,25 +154,34 @@ export default function Products() {
             {filtered.map((product) => (
               <div
                 key={product.id}
-                className="glass rounded-xl p-4 flex items-center justify-between"
+                className="glass rounded-xl p-4 flex items-center justify-between gap-2"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                {/* LEFT: ícone + texto */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
                     <Package className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="font-medium text-sm">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{product.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       R$ {product.price.toFixed(2)}
                       {product.stock !== null && ` • Estoque: ${product.stock}`}
-                    </p>                  </div>
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                {/* RIGHT: switch + editar */}
+                <div className="flex items-center gap-2 shrink-0">
                   <Switch
                     checked={product.active}
                     onCheckedChange={() => toggleActive(product)}
+                    className="shrink-0"
                   />
-                  <Button variant="ghost" size="icon-sm" onClick={() => openEdit(product)}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => openEdit(product)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
@@ -182,32 +194,70 @@ export default function Products() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="glass border-border max-w-sm mx-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar Produto" : "Novo Produto"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Editar Produto" : "Novo Produto"}
+            </DialogTitle>
             <DialogDescription>
-              {editing ? "Atualize as informações do produto." : "Preencha os dados do novo produto."}
+              {editing
+                ? "Atualize as informações do produto."
+                : "Preencha os dados do novo produto."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nome</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Pomada modeladora" className="h-12 bg-secondary" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Pomada modeladora"
+                className="h-12 bg-secondary"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Preço (R$)</Label>
-                <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="h-12 bg-secondary" />
+                <Input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="h-12 bg-secondary"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Estoque</Label>
-                <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="Opcional" className="h-12 bg-secondary" />
+                <Input
+                  type="number"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value)}
+                  placeholder="Opcional"
+                  className="h-12 bg-secondary"
+                />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Descrição</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" className="h-12 bg-secondary" />
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Opcional"
+                className="h-12 bg-secondary"
+              />
             </div>
-            <Button variant="gold" size="lg" className="w-full" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : editing ? "Salvar Alterações" : "Criar Produto"}
+            <Button
+              variant="gold"
+              size="lg"
+              className="w-full"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : editing ? (
+                "Salvar Alterações"
+              ) : (
+                "Criar Produto"
+              )}
             </Button>
           </div>
         </DialogContent>
