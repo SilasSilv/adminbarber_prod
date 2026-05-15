@@ -10,7 +10,11 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+
+  // =========================
   // CORS
+  // =========================
+
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsHeaders,
@@ -18,16 +22,20 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 Iniciando envio de lembretes WhatsApp")
+
+    console.log(
+      "🚀 Iniciando envio de lembretes WhatsApp"
+    )
 
     // =========================
     // SUPABASE
     // =========================
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!
-    const supabaseServiceKey = Deno.env.get(
-      "SUPABASE_SERVICE_ROLE_KEY"
-    )!
+    const supabaseUrl =
+      Deno.env.get("SUPABASE_URL")!
+
+    const supabaseServiceKey =
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 
     const supabase = createClient(
       supabaseUrl,
@@ -62,32 +70,45 @@ serve(async (req) => {
     // =========================
 
     const agora = new Date(
-      new Date().toLocaleString("en-US", {
-        timeZone: "America/Sao_Paulo",
-      })
+      new Date().toLocaleString(
+        "en-US",
+        {
+          timeZone:
+            "America/Sao_Paulo",
+        }
+      )
     )
 
-    const daquiDuasHoras = new Date(
-      agora.getTime() + 2 * 60 * 60 * 1000
-    )
+    const daquiDuasHoras =
+      new Date(
+        agora.getTime() +
+        2 * 60 * 60 * 1000
+      )
 
-    const hojeData = agora
-      .toISOString()
-      .split("T")[0]
+    const hojeData =
+      agora
+        .toISOString()
+        .split("T")[0]
 
     const horaAtual =
-      agora.toLocaleTimeString("pt-BR", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-      }) + ":00"
+      agora.toLocaleTimeString(
+        "pt-BR",
+        {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      ) + ":00"
 
     const horaLimite =
-      daquiDuasHoras.toLocaleTimeString("pt-BR", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-      }) + ":59"
+      daquiDuasHoras.toLocaleTimeString(
+        "pt-BR",
+        {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      ) + ":59"
 
     console.log(
       `📅 Buscando agendamentos de ${hojeData} entre ${horaAtual} e ${horaLimite}`
@@ -116,7 +137,10 @@ serve(async (req) => {
       .gte("start_time", horaAtual)
       .lte("start_time", horaLimite)
       .eq("status", "agendado")
-      .eq("reminder_wpp_sent", false)
+      .eq(
+        "reminder_wpp_sent",
+        false
+      )
 
     if (appointmentsError) {
       throw appointmentsError
@@ -126,15 +150,20 @@ serve(async (req) => {
       `📊 ${appointments?.length || 0} lembrete(s) encontrado(s)`
     )
 
-    if (!appointments || appointments.length === 0) {
+    if (
+      !appointments ||
+      appointments.length === 0
+    ) {
       return new Response(
         JSON.stringify({
-          message: "Nenhum lembrete pendente",
+          message:
+            "Nenhum lembrete pendente",
         }),
         {
           headers: {
             ...corsHeaders,
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
         }
       )
@@ -147,98 +176,155 @@ serve(async (req) => {
     // =========================
 
     for (const app of appointments) {
+
       try {
 
         // =========================
-        // NORMALIZAÇÃO DO TELEFONE
+        // NORMALIZAÇÃO TELEFONE
         // =========================
 
-        // Remove tudo que não for número
-        let phone = String(app.client_phone || "")
+        let phone = String(
+          app.client_phone || ""
+        )
           .replace(/\D/g, "")
           .trim()
 
-        // Remove código do Brasil se já existir
-        if (phone.startsWith("55")) {
+        // remove 55
+        if (
+          phone.startsWith("55")
+        ) {
           phone = phone.slice(2)
         }
 
-        // Se estiver sem o 9
-        // Exemplo:
-        // 1692765463 -> 16992765463
+        // adiciona 9 se faltar
         if (phone.length === 10) {
+
           phone =
             phone.substring(0, 2) +
             "9" +
             phone.substring(2)
         }
 
-        // Adiciona 55 obrigatoriamente
+        // adiciona DDI Brasil
         phone = `55${phone}`
 
-        // Segurança extra
-        phone = phone.replace(/\D/g, "")
+        phone =
+          phone.replace(/\D/g, "")
 
         console.log(
-          `📞 Número formatado final: ${phone}`
+          `📞 Número final: ${phone}`
         )
 
         const horaExibicao =
-          app.start_time.substring(0, 5)
+          app.start_time.substring(
+            0,
+            5
+          )
 
         // =========================
         // BUSCAR BARBEARIA
         // =========================
 
-        let barbershopName = "nossa barbearia"
+        let barbershopName =
+          "nossa barbearia"
 
         if (app.barbershop_id) {
-          const { data: barbershop } =
-            await supabase
-              .from("barbershops")
-              .select("name")
-              .eq("id", app.barbershop_id)
-              .single()
+
+          const {
+            data: barbershop,
+          } = await supabase
+            .from("barbershops")
+            .select("name")
+            .eq(
+              "id",
+              app.barbershop_id
+            )
+            .single()
 
           if (barbershop?.name) {
-            barbershopName = barbershop.name
+
+            barbershopName =
+              barbershop.name
           }
         }
 
         // =========================
-        // MENSAGEM
+        // ENDPOINT BOTÕES
         // =========================
 
-        const message =
-          `Olá, ${app.client_name}! 👋\n\n` +
-          `Este é um lembrete do seu agendamento na *${barbershopName}* hoje às *${horaExibicao}*.\n\n` +
-          `Por favor, confirme sua presença:\n\n` +
-          `*1* ✅ Confirmar\n` +
-          `*2* ❌ Cancelar`
-
         const url =
-          `https://api.vzaps.com/instances/${vzapsInstanceId}/chat/send/text`
+          `https://api.vzaps.com/instances/${vzapsInstanceId}/chat/send/buttons`
+
+        // =========================
+        // PAYLOAD
+        // =========================
+
+        const payload = {
+
+          phone: phone,
+
+          message:
+            `Olá, ${app.client_name}! 👋\n\n` +
+            `Seu horário na *${barbershopName}* está confirmado para hoje às *${horaExibicao}* ✂️\n\n` +
+            `Confirme seu agendamento:`,
+
+          footer: "AdminBarber",
+
+          buttons: [
+
+            {
+              id: `confirm_${app.id}`,
+              text: "✅ Confirmar",
+            },
+
+            {
+              id: `cancel_${app.id}`,
+              text: "❌ Cancelar",
+            },
+
+          ],
+        }
 
         console.log(
-          `📤 Enviando para ${app.client_name} (${phone})`
+          `📤 Enviando para ${app.client_name}`
+        )
+
+        console.log(
+          JSON.stringify(
+            payload,
+            null,
+            2
+          )
         )
 
         // =========================
         // ENVIO VZAPS
         // =========================
 
-        const vzapsResponse = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Client-Token": vzapsClientToken,
-            "X-Instance-Token": vzapsInstanceToken,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: message,
-          }),
-        })
+        const vzapsResponse =
+          await fetch(
+            url,
+            {
+              method: "POST",
+
+              headers: {
+
+                "Content-Type":
+                  "application/json",
+
+                "X-Client-Token":
+                  vzapsClientToken,
+
+                "X-Instance-Token":
+                  vzapsInstanceToken,
+              },
+
+              body:
+                JSON.stringify(
+                  payload
+                ),
+            }
+          )
 
         const responseStatus =
           vzapsResponse.status
@@ -247,33 +333,46 @@ serve(async (req) => {
           await vzapsResponse.text()
 
         console.log(
-          `📨 Resposta VZaps: ${responseStatus}`
+          `📨 Status: ${responseStatus}`
+        )
+
+        console.log(
+          `📨 Response: ${responseText}`
         )
 
         if (!vzapsResponse.ok) {
+
           throw new Error(
             `Erro API VZaps (${responseStatus}): ${responseText}`
           )
         }
 
         // =========================
-        // MARCAR COMO ENVIADO
+        // ATUALIZA BANCO
         // =========================
 
         await supabase
           .from("appointments")
           .update({
-            reminder_wpp_sent: true,
+
+            reminder_wpp_sent:
+              true,
+
             reminder_wpp_sent_at:
               new Date().toISOString(),
           })
           .eq("id", app.id)
 
         results.push({
-          client: app.client_name,
+
+          client:
+            app.client_name,
+
           phone: phone,
+
           status: "success",
         })
+
         console.log(
           `✅ Sucesso para ${app.client_name}`
         )
@@ -281,12 +380,16 @@ serve(async (req) => {
       } catch (e: any) {
 
         console.error(
-          `❌ Erro no envio ID ${app.id}: ${e.message}`
+          `❌ Erro no envio ID ${app.id}:`,
+          e.message
         )
 
         results.push({
+
           id: app.id,
+
           status: "error",
+
           error: e.message,
         })
       }
@@ -304,7 +407,8 @@ serve(async (req) => {
       {
         headers: {
           ...corsHeaders,
-          "Content-Type": "application/json",
+          "Content-Type":
+            "application/json",
         },
       }
     )
@@ -322,9 +426,11 @@ serve(async (req) => {
       }),
       {
         status: 400,
+
         headers: {
           ...corsHeaders,
-          "Content-Type": "application/json",
+          "Content-Type":
+            "application/json",
         },
       }
     )

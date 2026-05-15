@@ -37,7 +37,7 @@ serve(async (req) => {
     )
 
     // =========================
-    // NOVA ESTRUTURA VZAPS
+    // ESTRUTURA VZAPS
     // =========================
 
     const eventType =
@@ -70,12 +70,14 @@ serve(async (req) => {
     }
 
     // =========================
-    // IGNORAR MENSAGEM ENVIADA PELA INSTÂNCIA
+    // IGNORAR MENSAGENS DA INSTÂNCIA
     // =========================
 
     if (eventData?.info?.is_from_me === true) {
 
-      console.log("⏭️ Mensagem enviada pela própria instância")
+      console.log(
+        "⏭️ Mensagem enviada pela própria instância"
+      )
 
       return new Response(
         JSON.stringify({
@@ -97,36 +99,72 @@ serve(async (req) => {
     let rawPhone =
       eventData?.info?.sender_alt || ""
 
-    // remove tudo após @
-    rawPhone = rawPhone.split("@")[0]
+    rawPhone = rawPhone
+      .split("@")[0]
+      .replace(/\D/g, "")
 
-    // mantém apenas números
-    rawPhone = rawPhone.replace(/\D/g, "")
-
-    // remove lixo extra da VZaps
-    // mantém somente:
-    // 55 + DDD + 9 + número
-    // total = 13 dígitos
+    // segurança extra
     if (rawPhone.length > 13) {
       rawPhone = rawPhone.substring(0, 13)
     }
 
     // =========================
-    // EXTRAIR TEXTO
+    // EXTRAIR TEXTO / BOTÕES
     // =========================
 
-    const text =
-      (
-        eventData?.message?.conversation ||
-        ""
-      ).trim()
+    let text = ""
+
+    // TEXTO COMUM
+    const conversation =
+      eventData?.message?.conversation
+
+    // BOTÃO INTERATIVO VZAPS
+    const templateButtonReply =
+      eventData?.message?.template_button_reply_message
+
+    // TEXTO NORMAL
+    if (conversation) {
+
+      text = conversation.trim()
+
+      console.log(
+        "💬 Mensagem texto detectada"
+      )
+    }
+
+    // BOTÃO INTERATIVO
+    else if (templateButtonReply) {
+
+      const selectedId =
+        templateButtonReply?.selected_id || ""
+
+      const selectedText =
+        templateButtonReply?.selected_display_text || ""
+
+      console.log(
+        `🟢 Botão clicado ID: ${selectedId}`
+      )
+
+      console.log(
+        `🟢 Botão clicado Texto: ${selectedText}`
+      )
+
+      // usa o ID do botão
+      text = selectedId
+    }
 
     console.log(`📱 Telefone bruto: ${rawPhone}`)
     console.log(`💬 Texto recebido: ${text}`)
 
+    // =========================
+    // VALIDAR DADOS
+    // =========================
+
     if (!rawPhone || !text) {
 
-      console.log("⏭️ Sem telefone ou texto")
+      console.log(
+        "⏭️ Sem telefone ou texto"
+      )
 
       return new Response(
         JSON.stringify({
@@ -160,7 +198,9 @@ serve(async (req) => {
         phone.substring(2)
     }
 
-    console.log(`📱 Telefone normalizado: ${phone}`)
+    console.log(
+      `📱 Telefone normalizado: ${phone}`
+    )
 
     // =========================
     // INTERPRETAR RESPOSTA
@@ -173,30 +213,45 @@ serve(async (req) => {
 
     let novoStatus = ""
 
+    // =========================
     // CONFIRMAR
+    // =========================
+
     if (
       normalizedText === "1" ||
       normalizedText.includes("sim") ||
       normalizedText.includes("confirm") ||
-      normalizedText.includes("ok")
+      normalizedText.includes("ok") ||
+      normalizedText.startsWith("confirm_")
     ) {
+
       novoStatus = "confirmado"
     }
 
+    // =========================
     // CANCELAR
+    // =========================
+
     else if (
       normalizedText === "2" ||
       normalizedText.includes("cancel") ||
       normalizedText.includes("nao") ||
-      normalizedText.includes("não")
+      normalizedText.includes("não") ||
+      normalizedText.startsWith("cancel_")
     ) {
+
       novoStatus = "cancelado"
     }
 
+    // =========================
     // RESPOSTA INVÁLIDA
+    // =========================
+
     if (!novoStatus) {
 
-      console.log("⏭️ Resposta inválida")
+      console.log(
+        "⏭️ Resposta inválida"
+      )
 
       return new Response(
         JSON.stringify({
@@ -211,7 +266,9 @@ serve(async (req) => {
       )
     }
 
-    console.log(`✅ Novo status: ${novoStatus}`)
+    console.log(
+      `✅ Novo status: ${novoStatus}`
+    )
 
     // =========================
     // SUPABASE
@@ -266,7 +323,7 @@ serve(async (req) => {
     )
 
     // =========================
-    // LOCALIZAR CLIENTE
+    // LOCALIZAR AGENDAMENTO
     // =========================
 
     const appointment =
@@ -312,7 +369,7 @@ serve(async (req) => {
             ...corsHeaders,
             "Content-Type": "application/json",
           },
-        },
+        }
       )
     }
 
@@ -341,7 +398,7 @@ serve(async (req) => {
     )
 
     // =========================
-    // RESPOSTA
+    // RESPOSTA FINAL
     // =========================
 
     return new Response(
