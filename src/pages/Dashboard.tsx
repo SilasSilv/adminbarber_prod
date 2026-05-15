@@ -8,13 +8,15 @@ import {
   Scissors,
   Smartphone,
   AlertTriangle,
-  TrendingUp,
   Users,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import { PageLayout } from "@/components/layout/PageLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Button } from "@/components/ui/button";
+
 import {
   Avatar,
   AvatarFallback,
@@ -31,7 +33,17 @@ export default function Dashboard() {
 
   const { toast } = useToast();
 
-  const [todayCount, setTodayCount] = useState(0);
+  // =========================
+  // STATES
+  // =========================
+
+  const [loading, setLoading] = useState(true);
+
+  const [selectedDate, setSelectedDate] =
+    useState(new Date());
+
+  const [todayCount, setTodayCount] =
+    useState(0);
 
   const [todayRevenue, setTodayRevenue] =
     useState(0);
@@ -54,48 +66,95 @@ export default function Dashboard() {
   const [smartMessages, setSmartMessages] =
     useState<string[]>([]);
 
+  // =========================
+  // FORMAT DATE
+  // =========================
+
+  const selectedDateString =
+    selectedDate
+      .toISOString()
+      .split("T")[0];
+
+  const formattedDate =
+    selectedDate.toLocaleDateString(
+      "pt-BR",
+      {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      }
+    );
+
+  // =========================
+  // CHANGE DAY
+  // =========================
+
+  const changeDay = (days: number) => {
+    const newDate = new Date(selectedDate);
+
+    newDate.setDate(
+      newDate.getDate() + days
+    );
+
+    setSelectedDate(newDate);
+  };
+
+  // =========================
+  // EFFECT
+  // =========================
+
   useEffect(() => {
     if (!barbershop) return;
 
-    const today =
-      new Date().toISOString().split("T")[0];
-
-    const now = new Date();
-
-    const currentTime =
-      now.toLocaleTimeString("pt-BR", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
     const fetchStats = async () => {
       try {
+        setLoading(true);
+
+        // =========================
+        // HORA ATUAL
+        // =========================
+
+        const now = new Date();
+
+        const currentTime =
+          now.toLocaleTimeString(
+            "pt-BR",
+            {
+              hour12: false,
+              hour: "2-digit",
+              minute: "2-digit",
+            }
+          );
+
         // =========================
         // AGENDAMENTOS
         // =========================
 
-        const { data: appts } = await supabase
-          .from("appointments")
-          .select(`
-            id,
-            status,
-            total,
-            start_time,
-            client_name
-          `)
-          .eq(
-            "barbershop_id",
-            barbershop.id
-          )
-          .eq("date", today);
+        const { data: appts } =
+          await supabase
+            .from("appointments")
+            .select(`
+              id,
+              status,
+              total,
+              start_time,
+              client_name
+            `)
+            .eq(
+              "barbershop_id",
+              barbershop.id
+            )
+            .eq(
+              "date",
+              selectedDateString
+            );
 
         // =========================
         // PRÓXIMO CLIENTE
         // =========================
 
-        const { data: nextAppointments } =
-          await supabase
+        let nextAppointmentsQuery =
+          supabase
             .from("appointments")
             .select(`
               id,
@@ -107,28 +166,52 @@ export default function Dashboard() {
               "barbershop_id",
               barbershop.id
             )
-            .eq("date", today)
+            .eq(
+              "date",
+              selectedDateString
+            )
             .in("status", [
               "agendado",
               "confirmado",
             ])
-            .gte("start_time", currentTime)
             .order("start_time", {
               ascending: true,
             });
+
+        // Se for hoje, ignora horários passados
+        const isToday =
+          selectedDateString ===
+          new Date()
+            .toISOString()
+            .split("T")[0];
+
+        if (isToday) {
+          nextAppointmentsQuery =
+            nextAppointmentsQuery.gte(
+              "start_time",
+              currentTime
+            );
+        }
+
+        const {
+          data: nextAppointments,
+        } =
+          await nextAppointmentsQuery;
 
         if (
           nextAppointments &&
           nextAppointments.length > 0
         ) {
-          const next = nextAppointments[0];
+          const next =
+            nextAppointments[0];
 
           setNextClient({
             name: next.client_name,
-            time: next.start_time?.substring(
-              0,
-              5
-            ),
+            time:
+              next.start_time?.substring(
+                0,
+                5
+              ),
           });
         } else {
           setNextClient(null);
@@ -144,15 +227,18 @@ export default function Dashboard() {
           setConcludedCount(
             appts.filter(
               (a) =>
-                a.status === "atendido"
+                a.status ===
+                "atendido"
             ).length
           );
 
           setPendingCount(
             appts.filter(
               (a) =>
-                a.status === "agendado" ||
-                a.status === "confirmado"
+                a.status ===
+                  "agendado" ||
+                a.status ===
+                  "confirmado"
             ).length
           );
         }
@@ -161,45 +247,51 @@ export default function Dashboard() {
         // TRANSAÇÕES
         // =========================
 
-        const { data: txns } =
-          await supabase
-            .from("transactions")
-            .select(`
-              amount,
-              payment_method,
-              created_at
-            `)
-            .eq(
-              "barbershop_id",
-              barbershop.id
-            )
-            .gte(
-              "created_at",
-              `${today}T00:00:00`
-            )
-            .lte(
-              "created_at",
-              `${today}T23:59:59`
-            );
+        const {
+          data: txns,
+        } = await supabase
+          .from("transactions")
+          .select(`
+            amount,
+            payment_method,
+            created_at
+          `)
+          .eq(
+            "barbershop_id",
+            barbershop.id
+          )
+          .gte(
+            "created_at",
+            `${selectedDateString}T00:00:00`
+          )
+          .lte(
+            "created_at",
+            `${selectedDateString}T23:59:59`
+          );
 
         if (txns) {
-          const revenue = txns.reduce(
-            (s, t) =>
-              s + Number(t.amount),
-            0
-          );
+          const revenue =
+            txns.reduce(
+              (s, t) =>
+                s +
+                Number(t.amount),
+              0
+            );
 
           setTodayRevenue(revenue);
 
-          const todayPix = txns.filter(
-            (t) =>
-              t.payment_method === "pix"
-          );
+          const todayPix =
+            txns.filter(
+              (t) =>
+                t.payment_method ===
+                "pix"
+            );
 
           setPixTodayTotal(
             todayPix.reduce(
               (s, p) =>
-                s + Number(p.amount),
+                s +
+                Number(p.amount),
               0
             )
           );
@@ -208,42 +300,41 @@ export default function Dashboard() {
         }
 
         // =========================
-        // MENSAGENS INTELIGENTES
+        // INSIGHTS
         // =========================
 
         const messages: string[] = [];
 
-        // clientes sem confirmação
-
         const unconfirmed =
           appts?.filter(
-            (a) => a.status === "agendado"
+            (a) =>
+              a.status ===
+              "agendado"
           ).length || 0;
 
         if (unconfirmed > 0) {
           messages.push(
-            `⚠️ Você tem ${unconfirmed} cliente(s) sem confirmação hoje.`
+            `⚠️ Você tem ${unconfirmed} cliente(s) sem confirmação neste dia.`
           );
         }
-
-        // faturamento potencial
 
         const possibleRevenue =
           appts?.reduce(
             (sum, a) =>
-              sum + Number(a.total || 0),
+              sum +
+              Number(
+                a.total || 0
+              ),
             0
           ) || 0;
 
         if (possibleRevenue > 0) {
           messages.push(
-            `💰 Hoje sua agenda pode faturar R$ ${possibleRevenue.toFixed(
+            `💰 Sua agenda pode faturar R$ ${possibleRevenue.toFixed(
               2
             )}.`
           );
         }
-
-        // ocupação da agenda
 
         const occupied =
           appts?.length || 0;
@@ -252,12 +343,14 @@ export default function Dashboard() {
 
         const occupancy =
           Math.round(
-            (occupied / totalSlots) * 100
+            (occupied /
+              totalSlots) *
+              100
           ) || 0;
 
         if (occupancy >= 70) {
           messages.push(
-            `🔥 Sua agenda está ${occupancy}% ocupada hoje.`
+            `🔥 Sua agenda está ${occupancy}% ocupada.`
           );
         }
 
@@ -269,13 +362,35 @@ export default function Dashboard() {
           title: "Erro",
           description:
             "Falha ao carregar dashboard",
-          variant: "destructive",
+          variant:
+            "destructive",
         });
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchStats();
-  }, [barbershop]);
+  }, [
+    barbershop,
+    selectedDateString,
+  ]);
+
+  // =========================
+  // LOADING
+  // =========================
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Clock className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // =========================
+  // RENDER
+  // =========================
 
   return (
     <PageLayout title="Dashboard">
@@ -303,17 +418,44 @@ export default function Dashboard() {
                 "Carregando..."}
             </h2>
 
-            <p className="text-muted-foreground text-sm">
-              {new Date().toLocaleDateString(
-                "pt-BR",
-                {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                }
-              )}
+            <p className="text-muted-foreground text-sm capitalize">
+              {formattedDate}
             </p>
           </div>
+        </div>
+
+        {/* TROCA DE DIA */}
+
+        <div className="flex items-center justify-between rounded-xl border p-3">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() =>
+              changeDay(-1)
+            }
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          <div className="text-center">
+            <p className="font-semibold capitalize">
+              {formattedDate}
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              Navegue pelos dias
+            </p>
+          </div>
+
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() =>
+              changeDay(1)
+            }
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* SMART INSIGHTS */}
@@ -380,7 +522,9 @@ export default function Dashboard() {
           <StatCard
             title="Concluídos"
             value={concludedCount}
-            icon={<Star className="h-5 w-5" />}
+            icon={
+              <Star className="h-5 w-5" />
+            }
           />
 
           <StatCard
