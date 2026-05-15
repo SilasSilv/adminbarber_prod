@@ -78,7 +78,7 @@ export default function Relatorios() {
             status,
             total,
             service_id,
-            barber_id
+            professional_id
           `)
           .eq(
             "barbershop_id",
@@ -193,7 +193,7 @@ export default function Relatorios() {
         appts?.forEach((appt: any) => {
 
           const profId =
-            appt.barber_id;
+            appt.professional_id;
 
           if (!profId) return;
 
@@ -223,7 +223,7 @@ export default function Relatorios() {
             const appointmentsCount =
               appts?.filter(
                 (a) =>
-                  a.barber_id ===
+                  a.professional_id ===
                   prof.id
               ).length || 0;
 
@@ -449,8 +449,6 @@ export default function Relatorios() {
 
       <div className="p-4 space-y-6">
 
-        {/* filtros */}
-
         <div className="flex gap-2">
 
           <Button
@@ -476,8 +474,6 @@ export default function Relatorios() {
 
         </div>
 
-        {/* cards */}
-
         <div className="grid grid-cols-2 gap-3">
 
           {stats.map(
@@ -497,12 +493,10 @@ export default function Relatorios() {
 
         </div>
 
-        {/* barbeiros */}
-
         <div className="space-y-3 mt-6">
 
           <h3 className="font-semibold text-lg">
-            Desempenho por Barbeiro
+            Desempenho por Profissional
           </h3>
 
           {barberStats.map(
@@ -511,10 +505,6 @@ export default function Relatorios() {
               <div
                 key={index}
                 className="glass rounded-xl p-4 animate-slide-up"
-                style={{
-                  animationDelay:
-                    `${index * 0.1}s`,
-                }}
               >
 
                 <div className="flex items-center justify-between mb-3">
@@ -584,8 +574,6 @@ export default function Relatorios() {
           )}
 
         </div>
-
-        {/* serviço mais vendido */}
 
         {topService && (
 
