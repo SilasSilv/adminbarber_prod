@@ -49,8 +49,7 @@ export default function Relatorios() {
 
         if (txnError) throw txnError;
 
-        // 3️⃣ Get services for top service calculation
-        const { data: services, error: svcError } = await supabase
+        // 3️⃣ Get services for top service calculation        const { data: services, error: svcError } = await supabase
           .from("services")
           .select("id, name, price")
           .eq("barbershop_id", barbershop.id)
@@ -59,7 +58,8 @@ export default function Relatorios() {
         if (svcError) throw svcError;
 
         // 4️⃣ Get professionals for barber performance
-        const { data: pros, error: proError } = await supabase          .from("professionals")
+        const { data: pros, error: proError } = await supabase
+          .from("professionals")
           .select("id, name, commission_percent")
           .eq("barbershop_id", barbershop.id)
           .eq("active", true);
