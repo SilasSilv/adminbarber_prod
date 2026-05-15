@@ -18,7 +18,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop } from "@/context/BarbershopContext";
 
 export default function Relatorios() {
-
   const navigate = useNavigate();
 
   const { barbershop } = useBarbershop();
@@ -50,9 +49,7 @@ export default function Relatorios() {
   // =========================
 
   useEffect(() => {
-
     if (!barbershop) {
-
       setError("Barbearia não encontrada");
 
       setLoading(false);
@@ -61,9 +58,7 @@ export default function Relatorios() {
     }
 
     const fetchStats = async () => {
-
       try {
-
         // =========================
         // AGENDAMENTOS
         // =========================
@@ -156,8 +151,7 @@ export default function Relatorios() {
           .from("professionals")
           .select(`
             id,
-            name,
-            commission_percent
+            name
           `)
           .eq(
             "barbershop_id",
@@ -191,7 +185,6 @@ export default function Relatorios() {
           Record<string, number> = {};
 
         appts?.forEach((appt: any) => {
-
           const profId =
             appt.professional_id;
 
@@ -214,7 +207,6 @@ export default function Relatorios() {
 
         const barberPerformance =
           pros?.map((prof: any) => {
-
             const revenue =
               professionalRevenue[
                 prof.id
@@ -227,16 +219,7 @@ export default function Relatorios() {
                   prof.id
               ).length || 0;
 
-            const commission =
-              revenue *
-              (
-                Number(
-                  prof.commission_percent
-                ) || 0
-              ) / 100;
-
             return {
-
               id: prof.id,
 
               name: prof.name,
@@ -246,7 +229,8 @@ export default function Relatorios() {
 
               revenue,
 
-              commission,
+              commission:
+                revenue * 0.5,
             };
           }) || [];
 
@@ -261,7 +245,6 @@ export default function Relatorios() {
         const serviceStats =
           services?.map(
             (service: any) => {
-
               const count =
                 appts?.filter(
                   (a) =>
@@ -270,7 +253,6 @@ export default function Relatorios() {
                 ).length || 0;
 
               return {
-
                 service: service.name,
 
                 count,
@@ -303,10 +285,13 @@ export default function Relatorios() {
         setStats([
           {
             title: "Faturamento",
+
             value:
               `R$ ${todayRevenue.toFixed(2)}`,
+
             icon:
               <TrendingUp className="h-5 w-5" />,
+
             trend: {
               value: todayRevenue,
               positive: true,
@@ -315,10 +300,13 @@ export default function Relatorios() {
 
           {
             title: "Atendimentos",
+
             value:
               todayAppointments.toString(),
+
             icon:
               <Calendar className="h-5 w-5" />,
+
             trend: {
               value:
                 todayAppointments,
@@ -328,10 +316,13 @@ export default function Relatorios() {
 
           {
             title: "Profissionais",
+
             value:
               barberPerformance.length.toString(),
+
             icon:
               <Users className="h-5 w-5" />,
+
             trend: {
               value:
                 barberPerformance.length,
@@ -361,9 +352,7 @@ export default function Relatorios() {
         ]);
 
         setError(null);
-
       } catch (err: any) {
-
         console.error(
           "Erro ao buscar estatísticas:",
           err
@@ -371,7 +360,7 @@ export default function Relatorios() {
 
         setError(
           err.message ||
-          "Erro ao carregar relatórios"
+            "Erro ao carregar relatórios"
         );
 
         toast({
@@ -380,15 +369,12 @@ export default function Relatorios() {
             "Falha ao carregar relatórios",
           variant: "destructive",
         });
-
       } finally {
-
         setLoading(false);
       }
     };
 
     fetchStats();
-
   }, [barbershop]);
 
   // =========================
@@ -396,12 +382,9 @@ export default function Relatorios() {
   // =========================
 
   if (loading) {
-
     return (
       <div className="flex min-h-screen items-center justify-center">
-
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-
       </div>
     );
   }
@@ -411,12 +394,9 @@ export default function Relatorios() {
   // =========================
 
   if (error) {
-
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-
         <div className="text-center space-y-4">
-
           <h1 className="text-2xl font-bold">
             Erro ao carregar relatórios
           </h1>
@@ -432,9 +412,7 @@ export default function Relatorios() {
           >
             Voltar
           </Button>
-
         </div>
-
       </div>
     );
   }
@@ -444,13 +422,9 @@ export default function Relatorios() {
   // =========================
 
   return (
-
     <PageLayout title="Relatórios">
-
       <div className="p-4 space-y-6">
-
         <div className="flex gap-2">
-
           <Button
             variant="default"
             size="sm"
@@ -471,14 +445,11 @@ export default function Relatorios() {
           >
             Período
           </Button>
-
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-
           {stats.map(
             (stat, index) => (
-
               <StatCard
                 key={index}
                 title={stat.title}
@@ -487,137 +458,91 @@ export default function Relatorios() {
                 trend={stat.trend}
                 className="animate-fade-in"
               />
-
             )
           )}
-
         </div>
 
         <div className="space-y-3 mt-6">
-
           <h3 className="font-semibold text-lg">
             Desempenho por Profissional
           </h3>
 
           {barberStats.map(
             (barber, index) => (
-
               <div
                 key={index}
                 className="glass rounded-xl p-4 animate-slide-up"
               >
-
                 <div className="flex items-center justify-between mb-3">
-
                   <div className="flex items-center gap-3">
-
                     <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-
                       <span className="text-primary font-bold">
-
                         {barber.name?.charAt(0)}
-
                       </span>
-
                     </div>
 
                     <span className="font-semibold text-sm">
-
                       {barber.name}
-
                     </span>
-
                   </div>
 
                   <span className="text-sm text-muted-foreground">
-
                     {barber.appointments} atendimentos
-
                   </span>
-
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
-
                   <div>
-
                     <p className="text-muted-foreground">
                       Faturamento
                     </p>
 
                     <p className="font-semibold text-lg text-primary">
-
                       R$ {barber.revenue.toFixed(2)}
-
                     </p>
-
                   </div>
 
                   <div>
-
                     <p className="text-muted-foreground">
                       Comissão
                     </p>
 
                     <p className="font-semibold text-lg text-primary">
-
                       R$ {barber.commission.toFixed(2)}
-
                     </p>
-
                   </div>
-
                 </div>
-
               </div>
             )
           )}
-
         </div>
 
         {topService && (
-
           <div className="space-y-3 mt-6">
-
             <h3 className="font-semibold text-lg">
               Serviço Mais Vendido
             </h3>
 
             <div className="glass rounded-xl p-4">
-
               <div className="flex items-center gap-3">
-
                 <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-
                   <Scissors className="h-5 w-5 text-primary" />
-
                 </div>
 
                 <div>
-
                   <p className="font-semibold">
-
                     {topService.service}
-
                   </p>
 
                   <p className="text-sm text-muted-foreground">
-
                     {topService.count} vendas
-
                   </p>
-
                 </div>
-
               </div>
-
             </div>
-
           </div>
         )}
-
       </div>
-
     </PageLayout>
   );
 }
