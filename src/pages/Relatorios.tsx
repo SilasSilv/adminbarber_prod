@@ -31,7 +31,8 @@ export default function Relatorios() {
     const fetchStats = async () => {
       try {
         // 1️⃣ Get today's appointments and calculate revenue
-        const { data: appts, error: apptError } = await supabase          .from("appointments")
+        const { data: appts, error: apptError } = await supabase
+          .from("appointments")
           .select("id, status, total, service_id, barber_id")
           .eq("barbershop_id", barbershop.id)
           .eq("date", today);
@@ -57,7 +58,8 @@ export default function Relatorios() {
 
         if (svcError) throw svcError;
 
-        // 4️⃣ Get professionals for barber performance        const { data: pros, error: proError } = await supabase
+        // 4️⃣ Get professionals for barber performance
+        const { data: pros, error: proError } = await supabase
           .from("professionals")
           .select("id, name, commission_percent")
           .eq("barbershop_id", barbershop.id)
@@ -103,7 +105,7 @@ export default function Relatorios() {
             value: `R$ ${todayRevenue.toFixed(2)}`,
             icon: <TrendingUp className="h-5 w-5" />,
             trend: { value: todayRevenue, positive: true }
-          },
+          },  // <-- Add semicolon here
           {
             title: "Atendimentos",
             value: todayAppointments.toString(),
