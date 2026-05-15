@@ -35,6 +35,11 @@ export default function Relatorios() {
   const [error, setError] =
     useState<string | null>(null);
 
+  const [period, setPeriod] =
+    useState<"month" | "week" | "today">(
+      "month"
+    );
+
   // =========================
   // DATA ATUAL
   // =========================
@@ -59,6 +64,55 @@ export default function Relatorios() {
 
     const fetchStats = async () => {
       try {
+        setLoading(true);
+
+        // =========================
+        // FILTRO DE DATA
+        // =========================
+
+        let startDate = today;
+        let endDate = today;
+
+        const now = new Date();
+
+        // SEMANA
+        if (period === "week") {
+          const firstDay = new Date(now);
+
+          firstDay.setDate(
+            now.getDate() - 7
+          );
+
+          startDate =
+            firstDay
+              .toISOString()
+              .split("T")[0];
+
+          endDate = today;
+        }
+
+        // MÊS
+        if (period === "month") {
+          const firstDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            1
+          );
+
+          startDate =
+            firstDay
+              .toISOString()
+              .split("T")[0];
+
+          endDate = today;
+        }
+
+        // HOJE
+        if (period === "today") {
+          startDate = today;
+          endDate = today;
+        }
+
         // =========================
         // AGENDAMENTOS
         // =========================
@@ -73,13 +127,15 @@ export default function Relatorios() {
             status,
             total,
             service_id,
-            professional_id
+            professional_id,
+            date
           `)
           .eq(
             "barbershop_id",
             barbershop.id
           )
-          .eq("date", today);
+          .gte("date", startDate)
+          .lte("date", endDate);
 
         if (apptError) {
           throw apptError;
@@ -97,7 +153,8 @@ export default function Relatorios() {
           .select(`
             amount,
             payment_method,
-            barber_commission
+            barber_commission,
+            created_at
           `)
           .eq(
             "barbershop_id",
@@ -105,11 +162,11 @@ export default function Relatorios() {
           )
           .gte(
             "created_at",
-            `${today}T00:00:00`
+            `${startDate}T00:00:00`
           )
           .lte(
             "created_at",
-            `${today}T23:59:59`
+            `${endDate}T23:59:59`
           );
 
         if (txnError) {
@@ -178,7 +235,7 @@ export default function Relatorios() {
           ) || 0;
 
         // =========================
-        // FATURAMENTO POR BARBEIRO
+        // FATURAMENTO POR PROFISSIONAL
         // =========================
 
         const professionalRevenue:
@@ -202,7 +259,7 @@ export default function Relatorios() {
         });
 
         // =========================
-        // PERFORMANCE BARBEIROS
+        // PERFORMANCE
         // =========================
 
         const barberPerformance =
@@ -276,6 +333,8 @@ export default function Relatorios() {
           setTopService(
             serviceStats[0]
           );
+        } else {
+          setTopService(null);
         }
 
         // =========================
@@ -375,7 +434,7 @@ export default function Relatorios() {
     };
 
     fetchStats();
-  }, [barbershop]);
+  }, [barbershop, period]);
 
   // =========================
   // LOADING
@@ -424,28 +483,56 @@ export default function Relatorios() {
   return (
     <PageLayout title="Relatórios">
       <div className="p-4 space-y-6">
+
+        {/* FILTROS */}
+
         <div className="flex gap-2">
+
           <Button
-            variant="default"
+            variant={
+              period === "month"
+                ? "default"
+                : "outline"
+            }
             size="sm"
+            onClick={() =>
+              setPeriod("month")
+            }
           >
             Mês Atual
           </Button>
 
           <Button
-            variant="outline"
+            variant={
+              period === "week"
+                ? "default"
+                : "outline"
+            }
             size="sm"
+            onClick={() =>
+              setPeriod("week")
+            }
           >
             Semana
           </Button>
 
           <Button
-            variant="outline"
+            variant={
+              period === "today"
+                ? "default"
+                : "outline"
+            }
             size="sm"
+            onClick={() =>
+              setPeriod("today")
+            }
           >
-            Período
+            Hoje
           </Button>
+
         </div>
+
+        {/* CARDS */}
 
         <div className="grid grid-cols-2 gap-3">
           {stats.map(
@@ -462,6 +549,8 @@ export default function Relatorios() {
           )}
         </div>
 
+        {/* PROFISSIONAIS */}
+
         <div className="space-y-3 mt-6">
           <h3 className="font-semibold text-lg">
             Desempenho por Profissional
@@ -474,7 +563,9 @@ export default function Relatorios() {
                 className="glass rounded-xl p-4 animate-slide-up"
               >
                 <div className="flex items-center justify-between mb-3">
+
                   <div className="flex items-center gap-3">
+
                     <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
                       <span className="text-primary font-bold">
                         {barber.name?.charAt(0)}
@@ -484,14 +575,17 @@ export default function Relatorios() {
                     <span className="font-semibold text-sm">
                       {barber.name}
                     </span>
+
                   </div>
 
                   <span className="text-sm text-muted-foreground">
                     {barber.appointments} atendimentos
                   </span>
+
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
+
                   <div>
                     <p className="text-muted-foreground">
                       Faturamento
@@ -511,20 +605,26 @@ export default function Relatorios() {
                       R$ {barber.commission.toFixed(2)}
                     </p>
                   </div>
+
                 </div>
               </div>
             )
           )}
         </div>
 
+        {/* SERVIÇO MAIS VENDIDO */}
+
         {topService && (
           <div className="space-y-3 mt-6">
+
             <h3 className="font-semibold text-lg">
               Serviço Mais Vendido
             </h3>
 
             <div className="glass rounded-xl p-4">
+
               <div className="flex items-center gap-3">
+
                 <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
                   <Scissors className="h-5 w-5 text-primary" />
                 </div>
@@ -538,6 +638,7 @@ export default function Relatorios() {
                     {topService.count} vendas
                   </p>
                 </div>
+
               </div>
             </div>
           </div>
