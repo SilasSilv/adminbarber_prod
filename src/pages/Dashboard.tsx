@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-
 import {
   Calendar,
   DollarSign,
@@ -8,17 +7,14 @@ import {
   Plus,
   Scissors,
   Smartphone,
-  TrendingUp,
   AlertTriangle,
-  Trophy,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 
 import { PageLayout } from "@/components/layout/PageLayout";
-
 import { StatCard } from "@/components/dashboard/StatCard";
-
 import { Button } from "@/components/ui/button";
-
 import {
   Avatar,
   AvatarFallback,
@@ -26,23 +22,16 @@ import {
 } from "@/components/ui/avatar";
 
 import { useBarbershop } from "@/context/BarbershopContext";
-
 import { Link } from "react-router-dom";
-
 import { useToast } from "@/hooks/use-toast";
-
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Dashboard() {
+  const { barbershop } = useBarbershop();
 
-  const { barbershop } =
-    useBarbershop();
+  const { toast } = useToast();
 
-  const { toast } =
-    useToast();
-
-  const [todayCount, setTodayCount] =
-    useState(0);
+  const [todayCount, setTodayCount] = useState(0);
 
   const [todayRevenue, setTodayRevenue] =
     useState(0);
@@ -59,46 +48,114 @@ export default function Dashboard() {
   const [pixTodayTotal, setPixTodayTotal] =
     useState(0);
 
-  const [insights, setInsights] =
+  const [nextClient, setNextClient] =
+    useState<any>(null);
+
+  const [smartMessages, setSmartMessages] =
     useState<string[]>([]);
 
-  // =========================
-  // EFFECT
-  // =========================
-
   useEffect(() => {
-
     if (!barbershop) return;
 
     const today =
-      new Date()
-        .toISOString()
-        .split("T")[0];
+      new Date().toISOString().split("T")[0];
+
+    const now = new Date();
+
+    const currentTime =
+      now.toLocaleTimeString("pt-BR", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
     const fetchStats = async () => {
-
       try {
-
         // =========================
         // AGENDAMENTOS
         // =========================
 
-        const { data: appts } =
+        const { data: appts } = await supabase
+          .from("appointments")
+          .select(`
+            id,
+            status,
+            total,
+            start_time,
+            client_name
+          `)
+          .eq(
+            "barbershop_id",
+            barbershop.id
+          )
+          .eq("date", today);
+
+        // =========================
+        // PRÓXIMO CLIENTE
+        // =========================
+
+        const { data: nextAppointments } =
           await supabase
             .from("appointments")
             .select(`
               id,
-              status,
-              total,
-              professional_id,
               client_name,
-              start_time
+              start_time,
+              status
             `)
             .eq(
               "barbershop_id",
               barbershop.id
             )
-            .eq("date", today);
+            .eq("date", today)
+            .in("status", [
+              "agendado",
+              "confirmado",
+            ])
+            .gte("start_time", currentTime)
+            .order("start_time", {
+              ascending: true,
+            });
+
+        if (
+          nextAppointments &&
+          nextAppointments.length > 0
+        ) {
+          const next = nextAppointments[0];
+
+          setNextClient({
+            name: next.client_name,
+            time: next.start_time?.substring(
+              0,
+              5
+            ),
+          });
+        } else {
+          setNextClient(null);
+        }
+
+        // =========================
+        // ESTATÍSTICAS
+        // =========================
+
+        if (appts) {
+          setTodayCount(appts.length);
+
+          setConcludedCount(
+            appts.filter(
+              (a) =>
+                a.status === "atendido"
+            ).length
+          );
+
+          setPendingCount(
+            appts.filter(
+              (a) =>
+                a.status === "agendado" ||
+                a.status === "confirmado"
+            ).length
+          );
+        }
 
         // =========================
         // TRANSAÇÕES
@@ -125,77 +182,24 @@ export default function Dashboard() {
               `${today}T23:59:59`
             );
 
-        // =========================
-        // PROFISSIONAIS
-        // =========================
-
-        const { data: professionals } =
-          await supabase
-            .from("professionals")
-            .select(`
-              id,
-              name
-            `)
-            .eq(
-              "barbershop_id",
-              barbershop.id
-            )
-            .eq("active", true);
-
-        // =========================
-        // ESTATÍSTICAS
-        // =========================
-
-        if (appts) {
-
-          setTodayCount(appts.length);
-
-          setConcludedCount(
-            appts.filter(
-              (a) =>
-                a.status ===
-                "atendido"
-            ).length
-          );
-
-          setPendingCount(
-            appts.filter(
-              (a) =>
-                a.status ===
-                  "agendado" ||
-                a.status ===
-                  "confirmado"
-            ).length
-          );
-        }
-
         if (txns) {
-
-          setTodayRevenue(
-            txns.reduce(
-              (s, t) =>
-                s +
-                Number(
-                  t.amount
-                ),
-              0
-            )
+          const revenue = txns.reduce(
+            (s, t) =>
+              s + Number(t.amount),
+            0
           );
 
-          const todayPix =
-            txns.filter(
-              (t) =>
-                t.payment_method ===
-                "pix"
-            );
+          setTodayRevenue(revenue);
+
+          const todayPix = txns.filter(
+            (t) =>
+              t.payment_method === "pix"
+          );
 
           setPixTodayTotal(
             todayPix.reduce(
               (s, p) =>
-                s +
-                Number(
-                  p.amount
-                ),
+                s + Number(p.amount),
               0
             )
           );
@@ -204,243 +208,82 @@ export default function Dashboard() {
         }
 
         // =========================
-        // INSIGHTS INTELIGENTES
+        // MENSAGENS INTELIGENTES
         // =========================
 
-        const generatedInsights:
-          string[] = [];
+        const messages: string[] = [];
 
-        // Sem confirmação
+        // clientes sem confirmação
 
         const unconfirmed =
           appts?.filter(
-            (a) =>
-              a.status ===
-              "agendado"
+            (a) => a.status === "agendado"
           ).length || 0;
 
         if (unconfirmed > 0) {
-
-          generatedInsights.push(
-            `⚠️ Você tem ${unconfirmed} cliente(s) sem confirmação hoje`
+          messages.push(
+            `⚠️ Você tem ${unconfirmed} cliente(s) sem confirmação hoje.`
           );
         }
 
-        // Receita prevista
+        // faturamento potencial
 
-        const estimatedRevenue =
+        const possibleRevenue =
           appts?.reduce(
             (sum, a) =>
-              sum +
-              Number(
-                a.total || 0
-              ),
+              sum + Number(a.total || 0),
             0
           ) || 0;
 
-        generatedInsights.push(
-          `💰 Hoje sua agenda pode faturar R$ ${estimatedRevenue.toFixed(2)}`
-        );
+        if (possibleRevenue > 0) {
+          messages.push(
+            `💰 Hoje sua agenda pode faturar R$ ${possibleRevenue.toFixed(
+              2
+            )}.`
+          );
+        }
 
-        // Ocupação
+        // ocupação da agenda
 
-        const totalSlots = 20;
+        const occupied =
+          appts?.length || 0;
+
+        const totalSlots = 12;
 
         const occupancy =
           Math.round(
-            ((appts?.length || 0) /
-              totalSlots) *
-              100
-          );
+            (occupied / totalSlots) * 100
+          ) || 0;
 
-        generatedInsights.push(
-          `🔥 Sua agenda está ${occupancy}% ocupada hoje`
-        );
-
-        // Horários restantes
-
-        const remaining =
-          totalSlots -
-          (appts?.length || 0);
-
-        if (remaining <= 3) {
-
-          generatedInsights.push(
-            `⏰ Restam apenas ${remaining} horário(s) disponíveis hoje`
+        if (occupancy >= 70) {
+          messages.push(
+            `🔥 Sua agenda está ${occupancy}% ocupada hoje.`
           );
         }
 
-        // Cancelamentos
-
-        const canceled =
-          appts?.filter(
-            (a) =>
-              a.status ===
-              "cancelado"
-          ).length || 0;
-
-        if (canceled > 0) {
-
-          generatedInsights.push(
-            `📉 Você teve ${canceled} cancelamento(s) hoje`
-          );
-        }
-
-        // Próximo atendimento
-
-        const nextAppointment =
-          appts
-            ?.filter(
-              (a) =>
-                a.status !==
-                "cancelado"
-            )
-            ?.sort((a, b) =>
-              a.start_time.localeCompare(
-                b.start_time
-              )
-            )[0];
-
-        if (nextAppointment) {
-
-          generatedInsights.push(
-            `📅 Próximo cliente: ${nextAppointment.client_name} às ${nextAppointment.start_time?.substring(
-              0,
-              5
-            )}`
-          );
-        }
-
-        // Profissional destaque
-
-        if (
-          professionals &&
-          appts
-        ) {
-
-          const revenueByProfessional:
-            Record<
-              string,
-              number
-            > = {};
-
-          appts.forEach(
-            (appt: any) => {
-
-              if (
-                !appt.professional_id
-              ) return;
-
-              revenueByProfessional[
-                appt
-                  .professional_id
-              ] =
-                (
-                  revenueByProfessional[
-                    appt
-                      .professional_id
-                  ] || 0
-                ) +
-                Number(
-                  appt.total || 0
-                );
-            }
-          );
-
-          let bestProfessional =
-            null;
-
-          let bestRevenue = 0;
-
-          professionals.forEach(
-            (prof: any) => {
-
-              const revenue =
-                revenueByProfessional[
-                  prof.id
-                ] || 0;
-
-              if (
-                revenue >
-                bestRevenue
-              ) {
-
-                bestRevenue =
-                  revenue;
-
-                bestProfessional =
-                  prof.name;
-              }
-            }
-          );
-
-          if (
-            bestProfessional
-          ) {
-
-            generatedInsights.push(
-              `🏆 ${bestProfessional} lidera o faturamento hoje`
-            );
-          }
-        }
-
-        // Frases motivacionais
-
-        if (
-          occupancy >= 80
-        ) {
-
-          generatedInsights.push(
-            "🚀 Agenda quase lotada hoje!"
-          );
-        }
-
-        if (
-          occupancy === 100
-        ) {
-
-          generatedInsights.push(
-            "🎉 Agenda totalmente lotada hoje!"
-          );
-        }
-
-        setInsights(
-          generatedInsights
-        );
-
-      } catch (err) {
-
-        console.error(err);
+        setSmartMessages(messages);
+      } catch (error) {
+        console.error(error);
 
         toast({
           title: "Erro",
           description:
             "Falha ao carregar dashboard",
-          variant:
-            "destructive",
+          variant: "destructive",
         });
       }
     };
 
     fetchStats();
-
   }, [barbershop]);
-
-  // =========================
-  // RENDER
-  // =========================
 
   return (
     <PageLayout title="Dashboard">
-
       <div className="p-4 space-y-6">
-
-        {/* TOPO */}
+        {/* HEADER */}
 
         <div className="flex items-center gap-3">
-
           <Avatar className="h-12 w-12 border-2 border-primary/30">
-
             <AvatarImage
               src={
                 barbershop?.logoUrl ||
@@ -452,11 +295,9 @@ export default function Dashboard() {
             <AvatarFallback className="bg-primary/10 text-primary">
               <Scissors className="h-5 w-5" />
             </AvatarFallback>
-
           </Avatar>
 
           <div className="space-y-0.5">
-
             <h2 className="text-2xl font-bold">
               {barbershop?.name ||
                 "Carregando..."}
@@ -466,51 +307,58 @@ export default function Dashboard() {
               {new Date().toLocaleDateString(
                 "pt-BR",
                 {
-                  weekday:
-                    "long",
+                  weekday: "long",
                   day: "numeric",
-                  month:
-                    "long",
+                  month: "long",
                 }
               )}
             </p>
-
           </div>
         </div>
 
-        {/* INSIGHTS */}
+        {/* SMART INSIGHTS */}
 
-        <div className="space-y-2">
+        {smartMessages.length > 0 && (
+          <div className="space-y-3">
+            {smartMessages.map(
+              (msg, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-primary/20 bg-primary/5 p-4"
+                >
+                  <p className="text-sm font-medium">
+                    {msg}
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+        )}
 
-          {insights.map(
-            (
-              insight,
-              index
-            ) => (
+        {/* PRÓXIMO CLIENTE */}
 
-              <div
-                key={index}
-                className="
-                  glass
-                  rounded-xl
-                  p-3
-                  border
-                  border-primary/20
-                  text-sm
-                  animate-fade-in
-                "
-              >
-                {insight}
+        {nextClient && (
+          <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5 text-primary" />
+
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Próximo cliente
+                </p>
+
+                <p className="font-semibold">
+                  {nextClient.name} às{" "}
+                  {nextClient.time}
+                </p>
               </div>
-            )
-          )}
-
-        </div>
+            </div>
+          </div>
+        )}
 
         {/* CARDS */}
 
         <div className="grid grid-cols-2 gap-3">
-
           <StatCard
             title="Agendamentos"
             value={todayCount}
@@ -532,9 +380,7 @@ export default function Dashboard() {
           <StatCard
             title="Concluídos"
             value={concludedCount}
-            icon={
-              <Star className="h-5 w-5" />
-            }
+            icon={<Star className="h-5 w-5" />}
           />
 
           <StatCard
@@ -559,30 +405,23 @@ export default function Dashboard() {
             title="Pix Pendentes"
             value={pixPendingCount}
             icon={
-              <Smartphone className="h-5 w-5" />
+              <AlertTriangle className="h-5 w-5" />
             }
           />
-
         </div>
 
-        {/* NOVO AGENDAMENTO */}
+        {/* BOTÃO */}
 
         <Link to="/agenda/novo">
-
           <Button
             variant="gold"
             size="lg"
             className="w-full"
           >
-
             <Plus className="h-5 w-5 mr-2" />
-
             Novo Agendamento
-
           </Button>
-
         </Link>
-
       </div>
     </PageLayout>
   );
