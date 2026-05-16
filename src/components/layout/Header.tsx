@@ -59,9 +59,12 @@ export function Header({ title, showMenu = true }: HeaderProps) {
             <Copy className="h-5 w-5" />
           </Button>
           
+          {/* Botão de notificações oculto para implementação futura */}
+          {/* 
           <Button variant="ghost" size="icon-sm" className="relative">
             <Bell className="h-5 w-5" />
-          </Button>
+          </Button> 
+          */}
 
           {showMenu && (
             <DropdownMenu>

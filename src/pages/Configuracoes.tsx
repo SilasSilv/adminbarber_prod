@@ -16,8 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export default function Configuracoes() {
-  const { barbershop, bookingUrl, updateBarbershop, isOwner } = useBarbershop();
-  const { user } = useAuth();
+  const { barbershop, bookingUrl, updateBarbershop, isOwner, refetch } = useBarbershop();
   const { toast } = useToast();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,12 +56,22 @@ export default function Configuracoes() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     if (!file.type.startsWith("image/")) {
       toast({ title: "Formato inválido", description: "Selecione um arquivo de imagem.", variant: "destructive" });
       return;
     }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O tamanho máximo permitido é 2MB.", variant: "destructive" });
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setLogoPreview(base64);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -71,18 +80,33 @@ export default function Configuracoes() {
       toast({ title: "Nome obrigatório", description: "Informe o nome da barbearia.", variant: "destructive" });
       return;
     }
+    
     setSaving(true);
-    await updateBarbershop({ name: name.trim(), logo_url: logoPreview });
-    // Save pix settings directly
-    if (barbershop) {
-      await supabase.from("barbershops").update({
-        pix_key: pixKey.trim() || null,
-        pix_key_type: pixKeyType,
-        pix_receiver_name: pixReceiverName.trim() || null,
-      } as any).eq("id", barbershop.id);
+    try {
+      // Atualiza nome e logo
+      await updateBarbershop({ 
+        name: name.trim(), 
+        logo_url: logoPreview 
+      });
+
+      // Atualiza configurações Pix
+      if (barbershop) {
+        await supabase.from("barbershops").update({
+          pix_key: pixKey.trim() || null,
+          pix_key_type: pixKeyType,
+          pix_receiver_name: pixReceiverName.trim() || null,
+        } as any).eq("id", barbershop.id);
+      }
+
+      // Força atualização do contexto global para refletir o novo logo no Header
+      await refetch();
+      
+      toast({ title: "Salvo com sucesso! ✅", description: "As informações da barbearia foram atualizadas." });
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    toast({ title: "Salvo com sucesso! ✅", description: "As informações da barbearia foram atualizadas." });
   };
 
   const handleCopyLink = () => {
@@ -114,8 +138,21 @@ export default function Configuracoes() {
                   <AvatarFallback className="bg-primary/10 text-primary text-2xl"><Scissors className="h-8 w-8" /></AvatarFallback>
                 </Avatar>
                 <div className="space-y-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2"><Upload className="h-4 w-4" /> Enviar Logo</Button>
-                  {logoPreview && <Button variant="ghost" size="sm" onClick={() => setLogoPreview(null)} className="text-destructive text-xs">Remover</Button>}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleLogoChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                    <Upload className="h-4 w-4" /> Enviar Logo
+                  </Button>
+                  {logoPreview && (
+                    <Button variant="ghost" size="sm" onClick={() => setLogoPreview(null)} className="text-destructive text-xs">
+                      Remover
+                    </Button>
+                  )}
                   <p className="text-xs text-muted-foreground">PNG, JPG ou SVG. Máx 2MB.</p>
                 </div>
               </div>
