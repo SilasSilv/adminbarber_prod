@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Clock, User, Scissors, MessageCircle, CheckCircle, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,7 @@ import { ConcludeDialog } from "./ConcludeDialog";
 import { ManageAppointmentDialog } from "./ManageAppointmentDialog";
 import { useAppointments } from "@/context/AppointmentContext";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 
 const statusConfig: Record<AppointmentStatus, { label: string; className: string }> = {
   agendado: { label: "Agendado", className: "bg-warning/20 text-warning border-warning/30" },
@@ -68,7 +71,7 @@ export function AppointmentCard({ appointment, onWhatsApp, onClick }: Appointmen
             <span>{appointment.service?.name || "Serviço"}</span>
             <span className="text-muted-foreground">•</span>
             <span className="text-primary font-medium">
-              R$ {appointment.service?.price?.toFixed(2) || "0.00"}
+              {formatCurrency(appointment.service?.price || 0)}
             </span>
           </div>
         </div>

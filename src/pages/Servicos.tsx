@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Clock, DollarSign, Loader2 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -9,13 +11,13 @@ import { cn } from "@/lib/utils";
 import { useBarbershop } from "@/context/BarbershopContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/format";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -42,14 +44,12 @@ export default function Servicos() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Modal de criação
   const [openCreate, setOpenCreate] = useState(false);
   const [formName, setFormName] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formDuration, setFormDuration] = useState("30");
   const [saving, setSaving] = useState(false);
 
-  // Modal de edição
   const [openEdit, setOpenEdit] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editName, setEditName] = useState("");
@@ -57,7 +57,6 @@ export default function Servicos() {
   const [editDuration, setEditDuration] = useState("30");
   const [updating, setUpdating] = useState(false);
 
-  // Confirmação de exclusão (inativação)
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -67,7 +66,7 @@ export default function Servicos() {
     const { data } = await supabase
       .from("services")
       .select("*")
-      .eq("barbershop_id", barbershop.id) // CRITICAL: filter by barbershop_id
+      .eq("barbershop_id", barbershop.id)
       .order("created_at", { ascending: false });
     setServices((data || []).map(s => ({ ...s, price: Number(s.price) })));
     setLoading(false);
@@ -79,7 +78,7 @@ export default function Servicos() {
     if (!barbershop || !formName.trim()) return;
     setSaving(true);
     const { error } = await supabase.from("services").insert({
-      barbershop_id: barbershop.id, // CRITICAL: set barbershop_id
+      barbershop_id: barbershop.id,
       name: formName.trim(),
       price: parseFloat(formPrice) || 0,
       duration_minutes: parseInt(formDuration) || 30,
@@ -114,7 +113,7 @@ export default function Servicos() {
         duration_minutes: parseInt(editDuration) || 30,
       })
       .eq("id", editingService.id);
-    setUpdating(false);
+    setUpdating(true);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -123,6 +122,7 @@ export default function Servicos() {
       setEditingService(null);
       fetchServices();
     }
+    setUpdating(false);
   };
 
   const handleDeleteClick = (id: string) => {
@@ -179,7 +179,6 @@ export default function Servicos() {
           </DialogContent>
         </Dialog>
 
-        {/* Modal de Edição */}
         <Dialog open={openEdit} onOpenChange={setOpenEdit}>
           <DialogContent>
             <DialogHeader><DialogTitle>Editar Serviço</DialogTitle></DialogHeader>
@@ -205,7 +204,6 @@ export default function Servicos() {
           </DialogContent>
         </Dialog>
 
-        {/* Confirmação de Inativação */}
         <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -258,7 +256,7 @@ export default function Servicos() {
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1"><Clock className="h-4 w-4" /><span>{service.duration_minutes} min</span></div>
-                  <div className="flex items-center gap-1"><DollarSign className="h-4 w-4" /><span>R$ {service.price.toFixed(2)}</span></div>
+                  <div className="flex items-center gap-1"><DollarSign className="h-4 w-4" /><span>{formatCurrency(service.price)}</span></div>
                 </div>
               </div>
             ))}

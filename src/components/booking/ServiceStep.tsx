@@ -1,6 +1,9 @@
+"use client";
+
 import { BookingService } from "@/data/mockBookingData";
 import { cn } from "@/lib/utils";
 import { Scissors } from "lucide-react";
+import { formatCurrency } from "@/lib/format";
 
 interface ServiceStepProps {
   services: BookingService[];
@@ -35,7 +38,7 @@ export function ServiceStep({ services, selectedId, onSelect }: ServiceStepProps
               <p className="text-sm text-muted-foreground">{service.duration_minutes} min</p>
             </div>
             <p className="font-semibold text-primary text-lg">
-              R$ {service.price.toFixed(2)}
+              {formatCurrency(service.price)}
             </p>
           </button>
         ))}

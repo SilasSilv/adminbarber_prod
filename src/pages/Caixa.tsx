@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { 
   DollarSign, TrendingUp, CreditCard, Banknote, Smartphone,
@@ -8,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop } from "@/context/BarbershopContext";
+import { formatCurrency } from "@/lib/format";
 
 interface TransactionRow {
   id: string;
@@ -58,7 +61,7 @@ export default function Caixa() {
     supabase
       .from("transactions")
       .select("id, amount, products_amount, payment_method, barber_commission, created_at, appointment_id, appointments:appointments!transactions_appointment_id_fkey(client_name, services(name), professionals(name))")
-      .eq("barbershop_id", barbershop.id) // CRITICAL: filter by barbershop_id
+      .eq("barbershop_id", barbershop.id)
       .gte("created_at", `${dateStr}T00:00:00`)
       .lte("created_at", `${dateStr}T23:59:59`)
       .order("created_at", { ascending: false })
@@ -95,8 +98,8 @@ export default function Caixa() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3">
-          <StatCard title="Faturamento" value={`R$ ${totalRevenue.toFixed(2)}`} icon={<DollarSign className="h-5 w-5" />} />
-          <StatCard title="Comissões" value={`R$ ${totalCommission.toFixed(2)}`} icon={<TrendingUp className="h-5 w-5" />} />
+          <StatCard title="Faturamento" value={formatCurrency(totalRevenue)} icon={<DollarSign className="h-5 w-5" />} />
+          <StatCard title="Comissões" value={formatCurrency(totalCommission)} icon={<TrendingUp className="h-5 w-5" />} />
         </div>
 
         {/* Payment Methods Summary */}
@@ -105,17 +108,17 @@ export default function Caixa() {
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center p-3 bg-secondary rounded-lg">
               <Smartphone className="h-5 w-5 mx-auto mb-1 text-primary" />
-              <p className="text-lg font-bold">R$ {pixTotal.toFixed(2)}</p>
+              <p className="text-lg font-bold">{formatCurrency(pixTotal)}</p>
               <p className="text-xs text-muted-foreground">Pix</p>
             </div>
             <div className="text-center p-3 bg-secondary rounded-lg">
               <CreditCard className="h-5 w-5 mx-auto mb-1 text-primary" />
-              <p className="text-lg font-bold">R$ {cardTotal.toFixed(2)}</p>
+              <p className="text-lg font-bold">{formatCurrency(cardTotal)}</p>
               <p className="text-xs text-muted-foreground">Cartão</p>
             </div>
             <div className="text-center p-3 bg-secondary rounded-lg">
               <Banknote className="h-5 w-5 mx-auto mb-1 text-primary" />
-              <p className="text-lg font-bold">R$ {cashTotal.toFixed(2)}</p>
+              <p className="text-lg font-bold">{formatCurrency(cashTotal)}</p>
               <p className="text-xs text-muted-foreground">Dinheiro</p>
             </div>
           </div>
@@ -143,11 +146,11 @@ export default function Caixa() {
                         {apt?.services?.name || "Serviço"} • {apt?.professionals?.name || "Profissional"}
                       </p>
                       {transaction.products_amount > 0 && (
-                        <p className="text-xs text-primary">+ Produtos: R$ {transaction.products_amount.toFixed(2)}</p>
+                        <p className="text-xs text-primary">+ Produtos: {formatCurrency(transaction.products_amount)}</p>
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">R$ {transaction.amount.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-primary">{formatCurrency(transaction.amount)}</p>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <PaymentIcon className="h-3 w-3" />
                         <span>{paymentLabels[transaction.payment_method] || transaction.payment_method}</span>

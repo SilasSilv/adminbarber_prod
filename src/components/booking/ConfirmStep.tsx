@@ -1,7 +1,10 @@
+"use client";
+
 import { BookingService, BookingBarber } from "@/data/mockBookingData";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Scissors, User, CalendarDays, Clock, Phone } from "lucide-react";
+import { formatCurrency } from "@/lib/format";
 
 interface ConfirmStepProps {
   service: BookingService;
@@ -14,7 +17,7 @@ interface ConfirmStepProps {
 
 export function ConfirmStep({ service, barber, date, time, clientName, clientPhone }: ConfirmStepProps) {
   const items = [
-    { icon: Scissors, label: "Serviço", value: `${service.name} — R$ ${service.price.toFixed(2)}` },
+    { icon: Scissors, label: "Serviço", value: `${service.name} — ${formatCurrency(service.price)}` },
     { icon: User, label: "Profissional", value: barber.name },
     { icon: CalendarDays, label: "Data", value: format(date, "EEEE, dd 'de' MMMM", { locale: ptBR }) },
     { icon: Clock, label: "Horário", value: time },

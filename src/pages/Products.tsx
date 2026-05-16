@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,7 @@ import { Package, Plus, Pencil, Loader2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop } from "@/context/BarbershopContext";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/format";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +37,6 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
-  // Form state
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
@@ -156,7 +158,6 @@ export default function Products() {
                 key={product.id}
                 className="glass rounded-xl p-4 flex items-center justify-between gap-2"
               >
-                {/* LEFT: ícone + texto */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
                     <Package className="h-5 w-5 text-primary" />
@@ -164,13 +165,12 @@ export default function Products() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{product.name}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      R$ {product.price.toFixed(2)}
+                      {formatCurrency(product.price)}
                       {product.stock !== null && ` • Estoque: ${product.stock}`}
                     </p>
                   </div>
                 </div>
 
-                {/* RIGHT: switch + editar */}
                 <div className="flex items-center gap-2 shrink-0">
                   <Switch
                     checked={product.active}

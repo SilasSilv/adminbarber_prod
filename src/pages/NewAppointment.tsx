@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, Clock, User, Scissors, UserCircle, Loader2, Zap } from "lucide-react";
@@ -17,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop } from "@/context/BarbershopContext";
 import { useToast } from "@/hooks/use-toast";
 import { CreateClientDialog } from "@/components/booking/CreateClientDialog";
+import { formatCurrency } from "@/lib/format";
 
 interface ServiceRow { id: string; name: string; price: number; duration_minutes: number; }
 interface ProfessionalRow { id: string; name: string; }
@@ -70,7 +73,6 @@ export default function NewAppointment() {
     });
   }, [barbershop]);
 
-  // Fetch existing appointments when date or professional changes
   useEffect(() => {
     if (!barbershop || !formData.date || !formData.professional_id) {
       setExistingAppointments([]);
@@ -90,7 +92,6 @@ export default function NewAppointment() {
   const duration = selectedService?.duration_minutes || 30;
   const endTime = formData.time ? addMinutesToTime(formData.time, duration) : "";
 
-  // Check conflict whenever time/service/professional changes
   useEffect(() => {
     if (!formData.time || !formData.professional_id || !selectedService) {
       setConflictWarning(false);
@@ -107,7 +108,6 @@ export default function NewAppointment() {
     e.preventDefault();
     if (!barbershop || !formData.client_id || !formData.service_id || !formData.professional_id || !formData.date || !formData.time) return;
 
-    // Block if conflict and not encaixe
     if (conflictWarning && !formData.is_encaixe) {
       toast({
         title: "Conflito de horário",
@@ -170,17 +170,12 @@ export default function NewAppointment() {
       </header>
 
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
-        {/* Client selection - Mobile responsive */}
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <User className="h-4 w-4 text-primary" /> Cliente
           </Label>
           <Select value={formData.client_id} onValueChange={(value) => {
-            const selected = clients.find(c => c.id === value);
             setFormData({ ...formData, client_id: value });
-            if (selected) {
-              // phone is stored in client_phone on submit via clients lookup
-            }
           }}>
             <SelectTrigger className="h-12 bg-secondary">
               <SelectValue placeholder="Selecione o cliente" />
@@ -204,7 +199,6 @@ export default function NewAppointment() {
           )}
         </div>
 
-        {/* Service selection - Mobile responsive */}
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <Scissors className="h-4 w-4 text-primary" /> Serviço
@@ -218,7 +212,7 @@ export default function NewAppointment() {
                 <SelectItem key={s.id} value={s.id}>
                   <div className="flex items-center justify-between w-full gap-4">
                     <span>{s.name}</span>
-                    <span className="text-primary font-medium">R$ {Number(s.price).toFixed(2)}</span>
+                    <span className="text-primary font-medium">{formatCurrency(s.price)}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -232,7 +226,6 @@ export default function NewAppointment() {
           )}
         </div>
 
-        {/* Professional selection - Mobile responsive */}
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <UserCircle className="h-4 w-4 text-primary" /> Profissional
@@ -251,7 +244,6 @@ export default function NewAppointment() {
           </Select>
         </div>
 
-        {/* Date and Time - Mobile responsive */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
@@ -283,7 +275,6 @@ export default function NewAppointment() {
           </div>
         </div>
 
-        {/* Conflict warning - Mobile responsive */}
         {conflictWarning && (
           <div className="rounded-lg border border-warning/50 bg-warning/10 p-3 space-y-3">
             <p className="text-sm text-warning font-medium">
@@ -303,7 +294,6 @@ export default function NewAppointment() {
           </div>
         )}
 
-        {/* Notes - Mobile responsive */}
         <div className="space-y-2">
           <Label>Observações (opcional)</Label>
           <Textarea
@@ -314,7 +304,6 @@ export default function NewAppointment() {
           />
         </div>
 
-        {/* Submit button - Mobile responsive */}
         <div className="pt-4">
           <Button
             type="submit"

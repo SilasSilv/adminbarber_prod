@@ -1,9 +1,12 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Copy, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import QRCode from "qrcode";
 import { generatePixCode } from "@/lib/pix";
+import { formatCurrency } from "@/lib/format";
 
 interface PixPaymentStepProps {
   amount: number;
@@ -85,7 +88,7 @@ export function PixPaymentStep({ amount, merchantName, merchantCity, pixKey }: P
 
       <div className="text-center p-4 rounded-xl bg-primary/10 border border-primary/30">
         <p className="text-sm text-muted-foreground">Valor a pagar</p>
-        <p className="text-3xl font-bold text-primary">R$ {amount.toFixed(2)}</p>
+        <p className="text-3xl font-bold text-primary">{formatCurrency(amount)}</p>
       </div>
 
       {qrDataUrl ? (

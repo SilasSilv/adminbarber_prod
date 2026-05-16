@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { CheckCircle, Smartphone, Banknote, CreditCard, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import { PaymentMethod } from "@/types/barbershop";
 import { AddProductsModal } from "@/components/products/AddProductsModal";
 import { useAppointments } from "@/context/AppointmentContext";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 
 const paymentOptions: { value: PaymentMethod; label: string; icon: typeof Smartphone }[] = [
   { value: "pix", label: "Pix", icon: Smartphone },
@@ -66,7 +69,7 @@ export function ConcludeDialog({ open, onOpenChange, serviceName, servicePrice, 
               Concluir Atendimento
             </DialogTitle>
             <DialogDescription>
-              {serviceName} — <span className="text-primary font-semibold">R$ {servicePrice.toFixed(2)}</span>
+              {serviceName} — <span className="text-primary font-semibold">{formatCurrency(servicePrice)}</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -80,7 +83,7 @@ export function ConcludeDialog({ open, onOpenChange, serviceName, servicePrice, 
               >
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 {selectedProducts.length > 0
-                  ? `${selectedProducts.length} produto(s) — R$ ${productsTotal.toFixed(2)}`
+                  ? `${selectedProducts.length} produto(s) — ${formatCurrency(productsTotal)}`
                   : "Adicionar Produtos"}
               </Button>
               {selectedProducts.length > 0 && (
@@ -90,7 +93,7 @@ export function ConcludeDialog({ open, onOpenChange, serviceName, servicePrice, 
                     return (
                       <div key={sp.productId} className="flex justify-between text-muted-foreground">
                         <span>{sp.quantity}x {product?.name}</span>
-                        <span>R$ {((product?.price || 0) * sp.quantity).toFixed(2)}</span>
+                        <span>{formatCurrency((product?.price || 0) * sp.quantity)}</span>
                       </div>
                     );
                   })}
@@ -102,7 +105,7 @@ export function ConcludeDialog({ open, onOpenChange, serviceName, servicePrice, 
             {productsTotal > 0 && (
               <div className="flex justify-between items-center p-3 rounded-xl bg-primary/10 border border-primary/30">
                 <span className="font-medium text-sm">Total geral:</span>
-                <span className="text-lg font-bold text-primary">R$ {grandTotal.toFixed(2)}</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</span>
               </div>
             )}
 
