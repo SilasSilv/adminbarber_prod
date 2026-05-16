@@ -36,7 +36,7 @@ function formatDateStr(d: Date) {
 export default function Agenda() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [selectedProfessional, setSelectedProfessional] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<AgendaAppointment[]>([]);
   const [professionals, setProfessionals] = useState<EditableProfessional[]>([]);
