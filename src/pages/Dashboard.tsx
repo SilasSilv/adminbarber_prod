@@ -27,6 +27,7 @@ import { useBarbershop } from "@/context/BarbershopContext";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/lib/format";
 
 export default function Dashboard() {
   const { barbershop } = useBarbershop();
@@ -330,9 +331,7 @@ export default function Dashboard() {
 
         if (possibleRevenue > 0) {
           messages.push(
-            `💰 Sua agenda pode faturar R$ ${possibleRevenue.toFixed(
-              2
-            )}.`
+            `💰 Sua agenda pode faturar ${formatCurrency(possibleRevenue)}.`
           );
         }
 
@@ -511,9 +510,7 @@ export default function Dashboard() {
 
           <StatCard
             title="Faturamento"
-            value={`R$ ${todayRevenue.toFixed(
-              2
-            )}`}
+            value={formatCurrency(todayRevenue)}
             icon={
               <DollarSign className="h-5 w-5" />
             }
@@ -537,9 +534,7 @@ export default function Dashboard() {
 
           <StatCard
             title="Pix Hoje"
-            value={`R$ ${pixTodayTotal.toFixed(
-              2
-            )}`}
+            value={formatCurrency(pixTodayTotal)}
             icon={
               <Smartphone className="h-5 w-5" />
             }
